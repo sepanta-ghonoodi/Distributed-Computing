@@ -35,7 +35,7 @@ go run main.go
 *Note: The benchmark will take several minutes to complete as it iterates through all combinations of `GOMAXPROCS` (1, 2, 4, 8, NumCPU) and Goroutine counts (1, 2, 4, 8, 16, 32, 64) for all three workloads.*
 
 **Outputs:**
-Upon completion, the application generates the following artifacts in the same directory:
+Upon completion, the application generates the following artifacts in the results  directory:
 
 1. `results.csv`: A complete dataset of all calculated metrics (Time, Latency, Throughput) for analysis and graphing.
 2. `trace_CPU-bound.out`: The execution trace data for the CPU-bound scenario.

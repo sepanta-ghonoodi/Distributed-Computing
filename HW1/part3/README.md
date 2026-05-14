@@ -6,7 +6,7 @@ This directory contains the implementation for Part 3 of the Distributed Computi
 ## 1. File Structure
 
 * `main.go`: The main source code of the application, including the web server, endpoints, error handling, and logging middleware.
-* `Dockerfile`: The configuration file to build the Docker image, utilizing `golang:1.22-alpine` and the required `runflare` proxy settings.
+* `Dockerfile`: The configuration file to build the Docker image, utilizing `golang:1.22-alpine` .
 * `README.md`: The documentation file you are currently reading.
 
 ## 2. Dependencies and Environment
@@ -74,7 +74,7 @@ curl -s "http://localhost:8080/compute?op=add&a=5&b=7"
 ### Error Handling Test (Example: Division by Zero)
 
 ```bash
-curl --noproxy "*" -s "http://localhost:8080/compute?op=div&a=10&b=0"
+curl -s "http://localhost:8080/compute?op=div&a=10&b=0"
 
 ```
 
@@ -85,12 +85,12 @@ curl --noproxy "*" -s "http://localhost:8080/compute?op=div&a=10&b=0"
 
 ```
 
-## 7. Bonus Features (Extra Points)
+### **Extended Operations:**
 
-To differentiate this group's submission and improve code quality, two additional features were implemented:
+ Supports standard arithmetic (`add`, `sub`, `mul`, `div`) as well as modulo (`mod`). Includes strict input validation and edge-case handling (e.g., division/modulo by zero protection).
 
-## Features & Architecture
+### **Structured Telemetry:**
 
-* **Extended Operations:** Supports standard arithmetic (`add`, `sub`, `mul`, `div`) as well as modulo (`mod`). Includes strict input validation and edge-case handling (e.g., division/modulo by zero protection).
-* **Structured Telemetry:** Implements a custom HTTP middleware using Go's native `log/slog`. All incoming traffic generates structured JSON logs containing the HTTP method, request path, client IP, and total processing duration.
-  * *To view live logs, run:* `docker logs -f calc-service`
+Implements a custom HTTP middleware using Go's native `log/slog`. All incoming traffic generates structured JSON logs containing the HTTP method, request path, client IP, and total processing duration.
+
+* *To view live logs, run:* `docker logs -f calc-service`
