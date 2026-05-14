@@ -1,0 +1,7 @@
+go 1.26.3
+
+use (
+	./part1
+	./part2
+	./part3
+)

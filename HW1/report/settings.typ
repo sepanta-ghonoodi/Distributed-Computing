@@ -79,7 +79,7 @@
   let img_r = if logo_right != none { image(logo_right, width: 3cm) } else { [] }
 
   align(center)[
-    
+
     #grid(
       columns: (1fr, 2fr, 1fr),
       align: (center, center, center),
@@ -125,7 +125,8 @@
   title: "",
   body
 ) = {
-
+  set figure(numbering: "1")
+  show figure.caption: set align(center)
   // PAGE LAYOUT, BORDER & HEADER
   set page(
     paper: "a4",
@@ -185,7 +186,7 @@
 
   show link: set text(fill: blue)
   set enum(numbering: "(a)")
-
+  show outline: set outline(depth: 3)
   // TABLE OF CONTENTS STYLING
   show outline.entry.where(level: 1): it => {
     v(12pt, weak: true)

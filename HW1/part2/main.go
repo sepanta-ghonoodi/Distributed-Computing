@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
 	"log"
@@ -112,13 +113,18 @@ func runBenchmark(name string, task TaskFunc, procs, counts int, globalLimit int
 		workerStart := time.Now()
 		go func(workerID int) {
 			defer mainWg.Done()
-			task(workerID, counts, globalLimit, &results[workerID])
+			ctx := context.Background()
+			trace.WithRegion(ctx, fmt.Sprintf("%s-P%d-G%d", name, procs, counts), func() {
 
-			latency := time.Since(workerStart)
+				// Execute the specific workload
+				task(workerID, counts, globalLimit, &results[workerID])
 
-			mu.Lock()
-			totalLatency += latency
-			mu.Unlock()
+				latency := time.Since(workerStart)
+
+				mu.Lock()
+				totalLatency += latency
+				mu.Unlock()
+			})
 		}(i)
 	}
 
@@ -149,8 +155,8 @@ func main() {
 		limit int
 	}{
 		{"CPU-bound", cpuBoundTask, 500_000_000},
-		{"Mutex-bound", mutexTask, 10_00_000},
-		{"Sleep-bound", sleepTask, 5_000},
+		{"Mutex-bound", mutexTask, 10_000_00},
+		{"Sleep-bound", sleepTask, 50_000},
 	}
 
 	// 2. Execution Phase
@@ -158,14 +164,13 @@ func main() {
 	fmt.Println("Running benchmarks... Please wait.")
 
 	for _, s := range scenarios {
-		traceFilename := fmt.Sprintf("trace_%s.out", s.name)
+		traceFilename := fmt.Sprintf("./results/trace_%s.out", s.name)
 		cleanup := setupTracing(traceFilename)
 		for _, procs := range maxProcsValues {
 			for _, counts := range goroutineCounts {
 				m := runBenchmark(s.name, s.task, procs, counts, s.limit)
 				allResults = append(allResults, m)
 
-				// Reset shared state for Mutex task
 				sharedCounter = 0
 				runtime.GC()
 				time.Sleep(50 * time.Millisecond)
@@ -175,9 +180,7 @@ func main() {
 		log.Printf("Finished scenario: %s, Trace saved to: %s\n", s.name, traceFilename)
 	}
 
-	// 3. Reporting Phase
-	// printTerminalReport(allResults)
-	exportToCSV(allResults, "results.csv")
+	exportToCSV(allResults, "results/results.csv")
 }
 
 func printTerminalReport(results []Metrics) {
