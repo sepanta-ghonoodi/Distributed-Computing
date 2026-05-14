@@ -9,8 +9,8 @@
   logo_right: "./img/logo.png",
   title: "Distributed Systems",
   subtitle: "HW1",
-  name: "Sepanta Ghonoodi",
-  id: "2111143200",
+  names: ("Sepanta Ghonoodi", "Sajad Hasanpour"),
+  ids: ("810102483", "810102432"),
   date: today.display("[month repr:long] [day], [year]"),
 )
 

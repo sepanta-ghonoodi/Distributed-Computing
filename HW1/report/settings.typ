@@ -67,8 +67,8 @@
   logo_right: none,
   title: "",
   subtitle: "",
-  name: "",
-  id: "",
+  names: (),
+  ids: (),
   date: ""
 ) = {
   // 1. TURN OFF THE HEADER FOR THE TITLE PAGE
@@ -93,10 +93,10 @@
     #text(size: 14pt, weight: "bold", subtitle) \
     #v(1fr)
     #text(size: 12pt, "Full Name") \
-    #text(size: 14pt, name) \
+    #text(size: 14pt, names.join(linebreak())) \
     #v(3em)
     #text(size: 12pt, "Student ID") \
-    #text(size: 14pt, id) \
+    #text(size: 14pt, ids.join(linebreak())) \
     #v(1fr)
     #text(size: 12pt, date) \
     #v(2em)
