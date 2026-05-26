@@ -1,7 +1,6 @@
-ips
-loc
-*screenshots/*
-*.log
-*.zip
+*font*
+*.vscode/
 *.out
-.vscode/
+HW2/web-vm/WebService
+HW2/web-vm/main
+
