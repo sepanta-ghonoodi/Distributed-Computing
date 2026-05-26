@@ -8,11 +8,14 @@ import (
 
 	authpb "app/pb/AuthService"
 	filepb "app/pb/FileService"
+	"app/pubsub"
 	"flag"
 	"fmt"
 	"io"
 	"path/filepath"
+	"runtime"
 	"time"
+	"strconv"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -24,6 +27,7 @@ var (
 	templates      *template.Template
 	authServerAddr string
 	fileServerAddr string
+	leakedMemory   [][]byte 
 )
 
 // --- Struct Layouts ---
@@ -39,6 +43,47 @@ type MemoryEvent struct {
 	Timestamp   string `json:"timestamp"`
 }
 
+
+func startMemoryMonitor() {
+	threshold := uint64(300 * 1024 * 1024)
+
+	go func() {
+		for {
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+
+			if m.Alloc > threshold {
+				currentMB := m.Alloc / (1024 * 1024)
+				log.Printf("[ALERT] Memory: %v MB. Publishing event...", currentMB)
+				err := pubsub.PublishAlert(currentMB, 300, "http://localhost:9090/alert")
+				if err != nil {
+					log.Printf("[Error] Failed to publish event: %v", err)
+				}
+			}
+			time.Sleep(5 * time.Second)
+		}
+	}()
+}
+
+
+func consumeMemoryHandler(w http.ResponseWriter, r *http.Request) {
+	mbStr := r.URL.Query().Get("mb")
+	mb, err := strconv.Atoi(mbStr)
+	if err != nil || mb <= 0 {
+		mb = 50 
+	}
+
+	chunk := make([]byte, mb*1024*1024)
+	for i := range chunk {
+		chunk[i] = 1 
+	}
+	leakedMemory = append(leakedMemory, chunk)
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(fmt.Sprintf("Allocated %d MB. Total chunks: %d\n", mb, len(leakedMemory))))
+	log.Printf("[TEST] %d MB allocated. Total array length: %d", mb, len(leakedMemory))
+}
+
 func main() {
 	var err error
 	templates, err = template.ParseFiles(filepath.Join("templates", "login.html"))
@@ -48,24 +93,29 @@ func main() {
 
 	flag.StringVar(&authServerAddr, "auth", "localhost:50052", "Address of the Auth Server (VM2)")
 	flag.StringVar(&fileServerAddr, "file", "localhost:50053", "Address of the File Server (VM3)")
-
 	flag.Parse()
 
 	log.Printf("System Configuration Loaded:")
 	log.Printf(" -> Target Auth Endpoint: %s", authServerAddr)
 	log.Printf(" -> Target File Endpoint: %s", fileServerAddr)
 
+	startMemoryMonitor()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /login", loginGetHandler)
 	mux.HandleFunc("POST /login", loginPostHandler)
 	mux.HandleFunc("POST /download", fileRequestHandler)
 	mux.HandleFunc("GET /dashboard", dashboardHandler)
+	
+	mux.HandleFunc("GET /consume-memory", consumeMemoryHandler)
+
 	log.Println("Web Server (VM1) initializing on network port :8080...")
 
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("Server lifecycle crash: %v", err)
 	}
 }
+
 
 func loginGetHandler(w http.ResponseWriter, r *http.Request) {
 	err := templates.ExecuteTemplate(w, "login.html", PageData{ErrorMessage: ""})
@@ -199,7 +249,7 @@ func streamFileToClient(ctx context.Context, w http.ResponseWriter, filename str
 	if err != nil {
 		http.Error(w, "File service unavailable", http.StatusInternalServerError)
 		return err
-	}
+    }
 	defer conn.Close()
 
 	stream, err := initiateDownloadStream(ctx, client, filename, token)
