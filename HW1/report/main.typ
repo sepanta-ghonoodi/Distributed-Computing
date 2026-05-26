@@ -22,7 +22,7 @@
 // )
 #pagebreak()
 = Part 1
-
+#include "part1.typ"
 = Part 2
 #include "part2.typ"
 = Part 3

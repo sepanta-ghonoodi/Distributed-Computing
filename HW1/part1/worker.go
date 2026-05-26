@@ -16,7 +16,7 @@ const (
 )
 
 type Response struct {
-	Status string  `json:"status"` 
+	Status string  `json:"status"`
 	Result *float64 `json:"result,omitempty"`
 	Error  string  `json:"error,omitempty"`
 }
@@ -35,7 +35,7 @@ func makeNamedPipe(name string) {
 			fmt.Println("Error creating pipe", name, ":", err)
 			os.Exit(1)
 		}
-	} 
+	}
 }
 
 func orderProcessing(request string) string{
@@ -47,7 +47,7 @@ func orderProcessing(request string) string{
 		resObj.Status = "ERR"
 		resObj.Error = "Not complete input"
 		return toJSON(resObj)
-			
+
 	}
 	op := parts[0]
 	a, err1 := strconv.ParseFloat(parts[1], 64)
@@ -58,7 +58,7 @@ func orderProcessing(request string) string{
 		resObj.Error = "Invalid input"
 		return toJSON(resObj)
 	}
-	var result float64 
+	var result float64
 	switch op {
 		case "ADD":
 			result = a + b
@@ -118,6 +118,7 @@ func toJSON(resObj Response) string {
 }
 
 func main() {
+	initPipes()
 	fmt.Println("Worker is ready")
 	handleConnection()
 }

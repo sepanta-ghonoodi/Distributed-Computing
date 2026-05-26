@@ -1,4 +1,7 @@
-*font*
-*.vscode/
+ips
+loc
+*screenshots/*
+*.log
+*.zip
 *.out
-
+.vscode/
