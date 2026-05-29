@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v3.12.4
-// source: proto/AuthService.proto
+// source: pb/AuthService/AuthService.proto
 
 package AuthService
 
@@ -54,11 +54,11 @@ func (x UserRole) String() string {
 }
 
 func (UserRole) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_AuthService_proto_enumTypes[0].Descriptor()
+	return file_pb_AuthService_AuthService_proto_enumTypes[0].Descriptor()
 }
 
 func (UserRole) Type() protoreflect.EnumType {
-	return &file_proto_AuthService_proto_enumTypes[0]
+	return &file_pb_AuthService_AuthService_proto_enumTypes[0]
 }
 
 func (x UserRole) Number() protoreflect.EnumNumber {
@@ -67,7 +67,7 @@ func (x UserRole) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use UserRole.Descriptor instead.
 func (UserRole) EnumDescriptor() ([]byte, []int) {
-	return file_proto_AuthService_proto_rawDescGZIP(), []int{0}
+	return file_pb_AuthService_AuthService_proto_rawDescGZIP(), []int{0}
 }
 
 type ReqAuth struct {
@@ -80,7 +80,7 @@ type ReqAuth struct {
 
 func (x *ReqAuth) Reset() {
 	*x = ReqAuth{}
-	mi := &file_proto_AuthService_proto_msgTypes[0]
+	mi := &file_pb_AuthService_AuthService_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -92,7 +92,7 @@ func (x *ReqAuth) String() string {
 func (*ReqAuth) ProtoMessage() {}
 
 func (x *ReqAuth) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_AuthService_proto_msgTypes[0]
+	mi := &file_pb_AuthService_AuthService_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -105,7 +105,7 @@ func (x *ReqAuth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReqAuth.ProtoReflect.Descriptor instead.
 func (*ReqAuth) Descriptor() ([]byte, []int) {
-	return file_proto_AuthService_proto_rawDescGZIP(), []int{0}
+	return file_pb_AuthService_AuthService_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *ReqAuth) GetUsername() string {
@@ -132,7 +132,7 @@ type ResAuth struct {
 
 func (x *ResAuth) Reset() {
 	*x = ResAuth{}
-	mi := &file_proto_AuthService_proto_msgTypes[1]
+	mi := &file_pb_AuthService_AuthService_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -144,7 +144,7 @@ func (x *ResAuth) String() string {
 func (*ResAuth) ProtoMessage() {}
 
 func (x *ResAuth) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_AuthService_proto_msgTypes[1]
+	mi := &file_pb_AuthService_AuthService_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -157,7 +157,7 @@ func (x *ResAuth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResAuth.ProtoReflect.Descriptor instead.
 func (*ResAuth) Descriptor() ([]byte, []int) {
-	return file_proto_AuthService_proto_rawDescGZIP(), []int{1}
+	return file_pb_AuthService_AuthService_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ResAuth) GetToken() string {
@@ -174,11 +174,11 @@ func (x *ResAuth) GetRole() UserRole {
 	return UserRole_UNDEFINED
 }
 
-var File_proto_AuthService_proto protoreflect.FileDescriptor
+var File_pb_AuthService_AuthService_proto protoreflect.FileDescriptor
 
-const file_proto_AuthService_proto_rawDesc = "" +
+const file_pb_AuthService_AuthService_proto_rawDesc = "" +
 	"\n" +
-	"\x17proto/AuthService.proto\x12\vAuthService\"A\n" +
+	" pb/AuthService/AuthService.proto\x12\vAuthService\"A\n" +
 	"\aReqAuth\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\"J\n" +
@@ -194,25 +194,25 @@ const file_proto_AuthService_proto_rawDesc = "" +
 	"\x05Login\x12\x14.AuthService.ReqAuth\x1a\x14.AuthService.ResAuthB\x12Z\x10./pb/AuthServiceb\x06proto3"
 
 var (
-	file_proto_AuthService_proto_rawDescOnce sync.Once
-	file_proto_AuthService_proto_rawDescData []byte
+	file_pb_AuthService_AuthService_proto_rawDescOnce sync.Once
+	file_pb_AuthService_AuthService_proto_rawDescData []byte
 )
 
-func file_proto_AuthService_proto_rawDescGZIP() []byte {
-	file_proto_AuthService_proto_rawDescOnce.Do(func() {
-		file_proto_AuthService_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_AuthService_proto_rawDesc), len(file_proto_AuthService_proto_rawDesc)))
+func file_pb_AuthService_AuthService_proto_rawDescGZIP() []byte {
+	file_pb_AuthService_AuthService_proto_rawDescOnce.Do(func() {
+		file_pb_AuthService_AuthService_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pb_AuthService_AuthService_proto_rawDesc), len(file_pb_AuthService_AuthService_proto_rawDesc)))
 	})
-	return file_proto_AuthService_proto_rawDescData
+	return file_pb_AuthService_AuthService_proto_rawDescData
 }
 
-var file_proto_AuthService_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_AuthService_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_proto_AuthService_proto_goTypes = []any{
+var file_pb_AuthService_AuthService_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_pb_AuthService_AuthService_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_pb_AuthService_AuthService_proto_goTypes = []any{
 	(UserRole)(0),   // 0: AuthService.UserRole
 	(*ReqAuth)(nil), // 1: AuthService.ReqAuth
 	(*ResAuth)(nil), // 2: AuthService.ResAuth
 }
-var file_proto_AuthService_proto_depIdxs = []int32{
+var file_pb_AuthService_AuthService_proto_depIdxs = []int32{
 	0, // 0: AuthService.ResAuth.role:type_name -> AuthService.UserRole
 	1, // 1: AuthService.AuthSystem.Login:input_type -> AuthService.ReqAuth
 	2, // 2: AuthService.AuthSystem.Login:output_type -> AuthService.ResAuth
@@ -223,27 +223,27 @@ var file_proto_AuthService_proto_depIdxs = []int32{
 	0, // [0:1] is the sub-list for field type_name
 }
 
-func init() { file_proto_AuthService_proto_init() }
-func file_proto_AuthService_proto_init() {
-	if File_proto_AuthService_proto != nil {
+func init() { file_pb_AuthService_AuthService_proto_init() }
+func file_pb_AuthService_AuthService_proto_init() {
+	if File_pb_AuthService_AuthService_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_AuthService_proto_rawDesc), len(file_proto_AuthService_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_AuthService_AuthService_proto_rawDesc), len(file_pb_AuthService_AuthService_proto_rawDesc)),
 			NumEnums:      1,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_proto_AuthService_proto_goTypes,
-		DependencyIndexes: file_proto_AuthService_proto_depIdxs,
-		EnumInfos:         file_proto_AuthService_proto_enumTypes,
-		MessageInfos:      file_proto_AuthService_proto_msgTypes,
+		GoTypes:           file_pb_AuthService_AuthService_proto_goTypes,
+		DependencyIndexes: file_pb_AuthService_AuthService_proto_depIdxs,
+		EnumInfos:         file_pb_AuthService_AuthService_proto_enumTypes,
+		MessageInfos:      file_pb_AuthService_AuthService_proto_msgTypes,
 	}.Build()
-	File_proto_AuthService_proto = out.File
-	file_proto_AuthService_proto_goTypes = nil
-	file_proto_AuthService_proto_depIdxs = nil
+	File_pb_AuthService_AuthService_proto = out.File
+	file_pb_AuthService_AuthService_proto_goTypes = nil
+	file_pb_AuthService_AuthService_proto_depIdxs = nil
 }

@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	pb "app/pb/FileService"
+	pb "pb/FileService"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

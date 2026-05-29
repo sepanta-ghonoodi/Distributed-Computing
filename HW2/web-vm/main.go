@@ -6,16 +6,15 @@ import (
 	"log"
 	"net/http"
 
-	authpb "app/pb/AuthService"
-	filepb "app/pb/FileService"
-	"app/pubsub"
 	"flag"
 	"fmt"
 	"io"
 	"path/filepath"
+	authpb "pb/AuthService"
+	filepb "pb/FileService"
 	"runtime"
-	"time"
 	"strconv"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -27,22 +26,13 @@ var (
 	templates      *template.Template
 	authServerAddr string
 	fileServerAddr string
-	leakedMemory   [][]byte 
+	leakedMemory   [][]byte
 )
 
 // --- Struct Layouts ---
 type PageData struct {
 	ErrorMessage string
 }
-
-type MemoryEvent struct {
-	EventType   string `json:"event_type"`
-	Service     string `json:"service"`
-	MemoryMB    uint64 `json:"memory_mb"`
-	ThresholdMB uint64 `json:"threshold_mb"`
-	Timestamp   string `json:"timestamp"`
-}
-
 
 func startMemoryMonitor() {
 	threshold := uint64(300 * 1024 * 1024)
@@ -55,7 +45,7 @@ func startMemoryMonitor() {
 			if m.Alloc > threshold {
 				currentMB := m.Alloc / (1024 * 1024)
 				log.Printf("[ALERT] Memory: %v MB. Publishing event...", currentMB)
-				err := pubsub.PublishAlert(currentMB, 300, "http://localhost:9090/alert")
+				err := PublishAlert(currentMB, 300, "http://localhost:9090/alert")
 				if err != nil {
 					log.Printf("[Error] Failed to publish event: %v", err)
 				}
@@ -65,17 +55,16 @@ func startMemoryMonitor() {
 	}()
 }
 
-
 func consumeMemoryHandler(w http.ResponseWriter, r *http.Request) {
 	mbStr := r.URL.Query().Get("mb")
 	mb, err := strconv.Atoi(mbStr)
 	if err != nil || mb <= 0 {
-		mb = 50 
+		mb = 50
 	}
 
 	chunk := make([]byte, mb*1024*1024)
 	for i := range chunk {
-		chunk[i] = 1 
+		chunk[i] = 1
 	}
 	leakedMemory = append(leakedMemory, chunk)
 
@@ -106,7 +95,7 @@ func main() {
 	mux.HandleFunc("POST /login", loginPostHandler)
 	mux.HandleFunc("POST /download", fileRequestHandler)
 	mux.HandleFunc("GET /dashboard", dashboardHandler)
-	
+
 	mux.HandleFunc("GET /consume-memory", consumeMemoryHandler)
 
 	log.Println("Web Server (VM1) initializing on network port :8080...")
@@ -115,7 +104,6 @@ func main() {
 		log.Fatalf("Server lifecycle crash: %v", err)
 	}
 }
-
 
 func loginGetHandler(w http.ResponseWriter, r *http.Request) {
 	err := templates.ExecuteTemplate(w, "login.html", PageData{ErrorMessage: ""})
@@ -249,7 +237,7 @@ func streamFileToClient(ctx context.Context, w http.ResponseWriter, filename str
 	if err != nil {
 		http.Error(w, "File service unavailable", http.StatusInternalServerError)
 		return err
-    }
+	}
 	defer conn.Close()
 
 	stream, err := initiateDownloadStream(ctx, client, filename, token)

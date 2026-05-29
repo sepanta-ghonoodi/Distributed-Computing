@@ -1,0 +1,9 @@
+go 1.26.3
+
+use (
+	./auth-vm
+	./file-vm
+	./pb
+	./web-vm
+	./pubsub
+)

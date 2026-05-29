@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package FileService;
+
+option go_package = "./pb/FileService";
+
+message FileRequest {
+  string file_name = 1;
+}
+
+message FileResponse {
+  bytes chunk = 1;
+}
+
+service FileSystem {
+  rpc DownloadFile (FileRequest) returns (stream FileResponse);
+}

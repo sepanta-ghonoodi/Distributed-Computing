@@ -1,7 +1,8 @@
 package main
 
 import (
-	pb "app/pb/AuthService"
+	pb "pb/AuthService"
+	
 	"context"
 	"crypto/rand"
 	"encoding/hex"
