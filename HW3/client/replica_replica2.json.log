@@ -1,0 +1,4 @@
+2026/06/20 05:12:23 [replica2] Starting replica server on :8002
+2026/06/20 05:12:24 [replica2] Dynamic config updated: replication delay = 2000 ms
+2026/06/20 05:12:26 [replica2] Replicated write: new key k_strong_2000 = v_strong (v1, by replica1)
+2026/06/20 05:12:26 [replica2] Coordinated GET (strong consistency) for key: k_strong_2000

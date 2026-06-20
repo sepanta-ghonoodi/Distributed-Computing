@@ -1,0 +1,19 @@
+Testing Network Delay: 0 ms
+   Eventual Model - PUT Latency: 0 ms, GET Latency: 0 ms, Convergence: 52 ms, Stale Reads: 1
+   Strong Model   - PUT Latency: 2 ms, GET Latency: 0 ms, Convergence: 0 ms, Stale Reads: 0
+Testing Network Delay: 500 ms
+   Eventual Model - PUT Latency: 0 ms, GET Latency: 0 ms, Convergence: 514 ms, Stale Reads: 10
+   Strong Model   - PUT Latency: 504 ms, GET Latency: 0 ms, Convergence: 0 ms, Stale Reads: 0
+Testing Network Delay: 2000 ms
+   Eventual Model - PUT Latency: 1 ms, GET Latency: 0 ms, Convergence: 2046 ms, Stale Reads: 40
+   Strong Model   - PUT Latency: 2004 ms, GET Latency: 0 ms, Convergence: 0 ms, Stale Reads: 0
+
+METRICS SUMMARY TABLE
+Scenario/Dly | Model        | PUT Latency (ms) | GET Latency (ms) | Convergence (ms)   | Stale Reads 
+---------------------------------------------------------------------------------------------------------
+0            | Eventual     | 0                | 0                | 52                 | 1           
+0            | Strong       | 2                | 0                | 0                  | 0           
+500          | Eventual     | 0                | 0                | 514                | 10          
+500          | Strong       | 504              | 0                | 0                  | 0           
+2000         | Eventual     | 1                | 0                | 2046               | 40          
+2000         | Strong       | 2004             | 0                | 0                  | 0           

@@ -1,0 +1,9 @@
+{
+  "id": "replica2",
+  "port": 8002,
+  "db_path": "data_replica2.json",
+  "peers": {
+    "replica1": "http://localhost:8001",
+    "replica3": "http://localhost:8003"
+  }
+}

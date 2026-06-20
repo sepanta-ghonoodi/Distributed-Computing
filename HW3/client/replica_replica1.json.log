@@ -1,0 +1,6 @@
+2026/06/20 05:12:23 [replica1] Starting replica server on :8001
+2026/06/20 05:12:24 [replica1] Dynamic config updated: replication delay = 2000 ms
+2026/06/20 05:12:24 [replica1] Coordinated PUT (strong consistency) for key: k_strong_2000, value: v_strong
+2026/06/20 05:12:24 [replica1] Replicated write: new key k_strong_2000 = v_strong (v1, by replica1)
+2026/06/20 05:12:26 [replica1] Coordinated PUT (strong consistency) succeeded. Quorum size: 3/3. Version: 1
+2026/06/20 05:12:26 [replica1] Coordinated GET (strong consistency) for key: k_strong_2000
