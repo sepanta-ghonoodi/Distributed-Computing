@@ -8,7 +8,7 @@ optimiser/AMP/clipping boilerplate.
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import Any, Callable
 
 import torch
 import torch.nn as nn
@@ -117,7 +117,7 @@ def evaluate(
     device: torch.device,
     pred_len: int,
     target_hz: float,
-    step_hook: StepHook | None = None,
+    hook_factory: Callable[[dict[str, torch.Tensor]], StepHook | None] | None = None,
     desc: str = "eval",
     return_predictions: bool = False,
 ) -> dict[str, Any]:
@@ -125,16 +125,22 @@ def evaluate(
 
     This is the number that matters: teacher-forced validation loss looks great
     right up until the model is asked to consume its own output for 30 seconds.
-    `step_hook` is the Phase 2 Link-Projection injection point.
+
+    `hook_factory` is the Phase 2 Link-Projection injection point. It receives
+    the batch (already on-device) and returns a per-step hook, because the
+    projection needs each sample's `origin`/`theta` to reach world coordinates.
     """
     model.eval()
-    preds, trues = [], []
+    preds, trues, origins, thetas = [], [], [], []
 
     for batch in tqdm(loader, desc=f"[{desc}]", leave=False):
         batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
-        out = model.rollout(batch["src"], pred_len, batch["cv_delta"], step_hook=step_hook)
+        hook = hook_factory(batch) if hook_factory is not None else None
+        out = model.rollout(batch["src"], pred_len, batch["cv_delta"], step_hook=hook)
         preds.append(out["pos"].float().cpu())
         trues.append(batch["tgt_pos"].float().cpu())
+        origins.append(batch["origin"].float().cpu())
+        thetas.append(batch["theta"].float().cpu())
 
     pred_pos = torch.cat(preds, 0)
     true_pos = torch.cat(trues, 0)
@@ -143,6 +149,8 @@ def evaluate(
     if return_predictions:
         report["_pred_pos"] = pred_pos
         report["_true_pos"] = true_pos
+        report["_origin"] = torch.cat(origins, 0)
+        report["_theta"] = torch.cat(thetas, 0)
     return report
 
 

@@ -75,6 +75,7 @@ def main() -> None:
         desc=args.split, return_predictions=True,
     )
     pred_pos, true_pos = report.pop("_pred_pos"), report.pop("_true_pos")
+    report.pop("_origin"), report.pop("_theta")
     cv = constant_velocity_baseline(loader, cfg.data.target_hz, device)
 
     print(f"\n=== {args.split} set ({len(datasets[args.split]):,} windows) ===")

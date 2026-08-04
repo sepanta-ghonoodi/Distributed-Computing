@@ -126,6 +126,58 @@ def test_rollout_does_not_integrate_its_own_error():
     assert drift < 5.0, f"a single 50 m perturbation still moved the last step by {drift:.1f} m"
 
 
+def test_frame_transforms_torch_match_numpy():
+    """The torch transforms used by Link Projection must agree with the numpy
+    pair used at preprocessing time — otherwise snapping happens in the wrong
+    frame and silently corrupts every corrected step."""
+    from src.map.highway import from_agent_frame_t, to_agent_frame_t
+
+    rng = np.random.default_rng(3)
+    pts = rng.normal(size=(16, 2)) * 40
+    origin = rng.normal(size=(16, 2)) * 200
+    theta = rng.uniform(-np.pi, np.pi, 16)
+
+    np_out = to_agent_frame(pts[:, None, :], origin, theta)[:, 0, :]
+    t_out = to_agent_frame_t(
+        torch.tensor(pts), torch.tensor(origin), torch.tensor(theta)
+    ).numpy()
+    assert np.allclose(np_out, t_out, atol=1e-9)
+
+    back = from_agent_frame_t(
+        torch.tensor(t_out, dtype=torch.float64), torch.tensor(origin), torch.tensor(theta)
+    ).numpy()
+    assert np.allclose(back, pts, atol=1e-9)
+
+
+def test_link_projection_snaps_to_lane_centres():
+    """Full-strength snapping must put every corrected point on a centreline."""
+    from src.map.highway import (
+        LaneCentreMap,
+        from_agent_frame_t,
+        make_link_projection_hook,
+    )
+
+    lane_map = LaneCentreMap(torch.tensor([0.0, 3.7, 7.4, 11.1]))
+    model = _tiny_model()
+
+    b = 4
+    src = torch.randn(b, 20, NUM_FEATURES)
+    cv = torch.tensor([[15.0, 0.4]] * b)
+    origin = torch.randn(b, 2) * 100
+    theta = torch.rand(b) * 0.2 - 0.1
+
+    hook = make_link_projection_hook(lane_map, origin, theta, blend=1.0, start_step=0)
+    pos = model.rollout(src, 12, cv, step_hook=hook)["pos"]
+
+    # Every predicted point, back in world coordinates, must sit on a centreline.
+    flat = pos.reshape(-1, 2)
+    o = origin.repeat_interleave(12, dim=0)
+    th = theta.repeat_interleave(12, dim=0)
+    world_y = from_agent_frame_t(flat, o, th)[:, 1]
+    dist = (world_y.view(-1, 1) - lane_map.centres.view(1, -1)).abs().min(dim=1).values
+    assert dist.max() < 1e-4, f"max distance to a lane centre was {dist.max():.4f} m"
+
+
 def test_rollout_hook_is_applied():
     """The Phase 2 Link-Projection hook must actually steer the rollout."""
     model = _tiny_model()
