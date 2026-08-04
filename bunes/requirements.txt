@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------------------
+# PAS-LGT — dependencies
+#
+# Phase 1 needs only the "core" block. The rest are listed now so the
+# environment is built once; install them all up front if you prefer.
+#   pip install -r requirements.txt
+# PyTorch: install the CUDA build matching your driver, e.g.
+#   pip install torch --index-url https://download.pytorch.org/whl/cu124
+# ---------------------------------------------------------------------------
+
+# --- core (Phase 1: baseline Seq2Seq Transformer) --------------------------
+torch>=2.2                # model, training loop, AMP
+numpy>=1.26               # array math, window construction
+pandas>=2.1               # NGSIM / highD parsing, unified dataframe
+pyarrow>=15.0             # parquet I/O for the unified dataset
+scipy>=1.11               # Savitzky-Golay smoothing of raw kinematics
+PyYAML>=6.0               # config files
+tqdm>=4.66                # progress bars
+matplotlib>=3.8           # trajectory / error plots
+
+# --- Phase 2 (Link Projection, lane geometry) ------------------------------
+shapely>=2.0              # LineString centerlines, nearest-point projection
+scikit-learn>=1.4         # KD-Tree for fast candidate-lane lookup
+
+# --- Phase 3-5 (physics loss, situation encoder, adversarial training) -----
+networkx>=3.2             # lane graph -> adjacency / shortest-path-distance matrices
+einops>=0.7               # readable tensor reshapes in the attention-bias code
+
+# --- Phase 6 (VEC migration controller) ------------------------------------
+pulp>=2.8                 # binary integer program for RSU service placement
+geopandas>=0.14           # RSU coverage polygons + spatial joins (optional)
+
+# --- tooling ---------------------------------------------------------------
+tensorboard>=2.15         # training curves
+pytest>=8.0               # smoke tests

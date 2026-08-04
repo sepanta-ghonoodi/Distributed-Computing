@@ -1,0 +1,48 @@
+# Phase 1 on Google Colab.
+# Identical to phase1_baseline.yaml except for the runtime knobs: Colab gives
+# ~2 CPU cores (so fewer dataloader workers) and a single GPU (so AMP is worth
+# enabling). If no GPU is attached, src/train.py falls back to CPU with a
+# warning rather than crashing.
+
+data:
+  unified_path: data/processed/unified.parquet
+  cache_dir: data/processed/windows
+  source_hz: 10.0
+  target_hz: 2.0
+  obs_seconds: 10.0
+  pred_seconds: 30.0
+  window_stride: 4
+  min_mean_speed: 1.0
+  val_fraction: 0.15
+  test_fraction: 0.15
+  split_seed: 1234
+  max_vehicles: null
+
+model:
+  d_model: 128
+  nhead: 8
+  num_encoder_layers: 4
+  num_decoder_layers: 4
+  dim_feedforward: 512
+  dropout: 0.1
+  activation: gelu
+  norm_first: true
+  use_cv_prior: true
+  delta_scale: 3.0
+
+train:
+  batch_size: 128       # a T4 handles this comfortably at d_model=128
+  epochs: 60
+  lr: 3.0e-4
+  weight_decay: 1.0e-4
+  warmup_steps: 500
+  grad_clip: 1.0
+  loss: mse_position
+  teacher_forcing: true
+  num_workers: 2        # Colab VMs expose ~2 cores
+  device: cuda
+  amp: true
+  seed: 42
+  eval_every: 1
+  early_stop_patience: 12
+  out_dir: runs/phase1_colab

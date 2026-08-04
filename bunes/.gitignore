@@ -1,0 +1,25 @@
+# --- generated data & experiment outputs -----------------------------------
+# The synthetic dataset is reproducible from a seed and the window cache is
+# derived, so neither belongs in git. Colab regenerates both in seconds.
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+runs/
+*.pt
+*.parquet
+*.npz
+
+# --- python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+venv/
+.venv/
+*.egg-info/
+
+# --- editors / os -------------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
