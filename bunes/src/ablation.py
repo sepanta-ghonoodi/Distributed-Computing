@@ -136,9 +136,11 @@ def main() -> None:
     print(
         f"\nerror budget | longitudinal {100 * (1 - share):.1f}%  "
         f"lateral {100 * share:.1f}%\n"
-        "Link Projection can only act on the lateral share, so it drives the\n"
-        "off-road rate to zero without moving ADE. Closing the ADE gap needs a\n"
-        "longitudinal constraint -- that is Phase 3 (IDM)."
+        "Link Projection acts only on the lateral share, so it drives the\n"
+        "off-road rate towards zero without moving ADE much. The longitudinal\n"
+        "share is where the ADE gap lives; the IDM regulariser of Phase 3 was\n"
+        "our attempt at it and made things worse on both datasets, so this\n"
+        "remains open."
     )
 
     if args.plot:
