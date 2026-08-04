@@ -70,9 +70,38 @@ every phase, so they are worth reading once.
 | Coordinates | `x` = longitudinal (direction of travel), `y` = lateral, metres. NGSIM `Local_Y→x`, `Local_X→y`; highD's reverse direction is mirrored. |
 | Sampling rate | Raw data resampled to `target_hz` (default **2 Hz**). 10 s history = 20 steps, 30 s horizon = 60 steps. Decoding 300 autoregressive steps at 10 Hz is neither necessary nor stable. |
 | Model frame | Every window is translated to the last observed point and rotated to its heading. `origin`/`theta` ride along in each batch so Phase 2 can go back to world coordinates. |
-| Model output | Per-step **displacements**, not positions. Positions = `cumsum`. |
-| Prior | Output is added to a constant-velocity extrapolation, with the head zero-initialised. An untrained model is exactly a CV predictor — this is the "History Message" fusion point that Phase 3 extends with IDM. |
+| Model output | An **offset from a constant-velocity anchor**: `pos_t = (t+1)·cv_delta + o_t`. Not per-step displacements — see below. |
+| Prior | The anchor is the last observed displacement extrapolated forward, with the head zero-initialised. An untrained model is exactly a CV predictor — this is the "History Message" fusion point that Phase 3 extends with IDM. |
 | Evaluation | Always **autoregressive** (`model.rollout`). Teacher-forced validation loss is misleading for this problem. |
+
+## Why the output is an offset, not a displacement
+
+The first working version predicted per-step displacements and recovered
+position by `cumsum`. It failed in an instructive way, and the failure is worth
+recording because it is the exact phenomenon Phases 2 and 5 exist to fight.
+
+Under teacher forcing, the cheapest way to minimise the loss is to copy the
+previous displacement token — speeds change slowly, so "same as last step"
+scores almost perfectly. Training loss fell monotonically to ~0.5. But during
+free-running rollout the model then integrates its *own* copied error 60 times:
+a feedback loop with gain ≈ 1. Symptoms:
+
+* validation ADE oscillating between 7 m and 44 m across consecutive epochs
+  while training loss fell smoothly — instability, not overfitting;
+* lateral RMSE stable at ~1 m while longitudinal RMSE swung between 18 m and
+  71 m — the divergence was purely in the integrated speed;
+* the model losing to a constant-velocity baseline (ADE 7.9 m).
+
+Anchoring every step to the prior removes the integrator. An error in `o_t` no
+longer propagates into `o_{t+1}`, and if the model still learns to copy, the
+degenerate solution is "constant velocity plus a fixed offset" — roughly
+baseline quality — instead of exponential divergence. The failure mode becomes
+graceful.
+
+Three tests lock this in: `test_untrained_model_is_constant_velocity`,
+`test_rollout_does_not_integrate_its_own_error`, and
+`test_teacher_forcing_matches_rollout`. Training also prints
+`<-- WORSE THAN CONSTANT VELOCITY` on any epoch that loses to the baseline.
 
 ## Phase 2 attachment point
 

@@ -197,8 +197,6 @@ class HighwayWindowDataset(Dataset):
 
     Batch contents:
         src        (obs_len, F)   scaled encoder input
-        tgt_in     (pred_len, 2)  decoder input: shifted-right ground-truth deltas
-                                  (index 0 is the zero start token)
         tgt_delta  (pred_len, 2)  ground-truth per-step displacement [m]
         tgt_pos    (pred_len, 2)  ground-truth absolute position, agent frame [m]
         cv_delta   (2,)           last observed displacement [m] (CV prior)
@@ -218,13 +216,11 @@ class HighwayWindowDataset(Dataset):
         return len(self.b)
 
     def __getitem__(self, i: int) -> dict[str, torch.Tensor]:
-        delta = self.b.fut_delta[i]
-        # Teacher-forcing input: previous ground-truth delta, zero-padded at t=0.
-        tgt_in = np.concatenate([np.zeros((1, 2), np.float32), delta[:-1]], 0)
+        # The model derives its own teacher-forcing tokens from `tgt_pos` and
+        # `cv_delta`, so no shifted input needs to be materialised here.
         return {
             "src": torch.from_numpy(self.src[i]),
-            "tgt_in": torch.from_numpy(tgt_in),
-            "tgt_delta": torch.from_numpy(delta),
+            "tgt_delta": torch.from_numpy(self.b.fut_delta[i]),
             "tgt_pos": torch.from_numpy(self.b.fut_pos[i]),
             "cv_delta": torch.from_numpy(self.cv_delta[i]),
             "origin": torch.from_numpy(self.b.origin[i]),

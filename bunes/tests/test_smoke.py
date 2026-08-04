@@ -58,17 +58,21 @@ def test_window_shapes_and_target_consistency():
     assert np.allclose(bundle.features[:, -1, 0:2], 0.0, atol=1e-4)
 
 
+def _tiny_model():
+    cfg = ModelConfig(d_model=32, nhead=4, num_encoder_layers=1,
+                      num_decoder_layers=1, dim_feedforward=64, dropout=0.0)
+    return build_model(NUM_FEATURES, cfg).eval()
+
+
 def test_teacher_forcing_matches_rollout():
-    """Feeding ground truth through rollout must reproduce the forward pass.
+    """Feeding the model's own output back through forward() must reproduce it.
 
     This is the invariant that breaks silently when the decoder's token
     convention drifts between training and inference — the single most common
     way a Seq2Seq trajectory model ends up 'training fine, predicting garbage'.
     """
     torch.manual_seed(0)
-    cfg = ModelConfig(d_model=32, nhead=4, num_encoder_layers=1,
-                      num_decoder_layers=1, dim_feedforward=64, dropout=0.0)
-    model = build_model(NUM_FEATURES, cfg).eval()
+    model = _tiny_model()
 
     b, obs, pred = 3, 20, 8
     src = torch.randn(b, obs, NUM_FEATURES)
@@ -76,18 +80,55 @@ def test_teacher_forcing_matches_rollout():
 
     with torch.no_grad():
         free = model.rollout(src, pred, cv)
-        # Teacher-force the model's *own* free-running output.
-        tgt_in = torch.cat([torch.zeros(b, 1, 2), free["delta"][:, :-1]], dim=1)
-        forced = model(src, tgt_in, cv)
+        # Teacher-force on the model's *own* free-running positions.
+        forced = model(src, free["pos"], cv)
 
-    assert torch.allclose(forced, free["delta"], atol=1e-5)
+    assert torch.allclose(forced, free["pos"], atol=1e-5)
+
+
+def test_untrained_model_is_constant_velocity():
+    """The zero-initialised head must make the model an exact CV predictor.
+
+    This guards the anchoring that keeps the rollout from diverging: if the
+    head ever stops being zero-initialised, training no longer starts from a
+    sane reference and the failure is silent.
+    """
+    model = _tiny_model()
+    src = torch.randn(4, 20, NUM_FEATURES)
+    cv = torch.tensor([[15.0, 0.2], [12.0, -0.3], [30.0, 0.0], [7.5, 1.0]])
+
+    out = model.rollout(src, 60, cv)
+    steps = torch.arange(1, 61, dtype=torch.float32).view(1, -1, 1)
+    assert torch.allclose(out["pos"], cv.unsqueeze(1) * steps, atol=1e-4)
+
+
+def test_rollout_does_not_integrate_its_own_error():
+    """A perturbation at one step must not accumulate into later steps.
+
+    The first version of the model predicted per-step displacements and
+    integrated them, so a single bad step shifted every subsequent position.
+    With positions anchored to the constant-velocity prior, corrupting step k
+    must leave step k+1 onwards anchored, not permanently offset.
+    """
+    torch.manual_seed(0)
+    model = _tiny_model()
+    src = torch.randn(2, 20, NUM_FEATURES)
+    cv = torch.tensor([[15.0, 0.0], [15.0, 0.0]])
+
+    def kick(pos, step):
+        # Shove step 3 fifty metres sideways, leave everything else alone.
+        return pos + torch.tensor([0.0, 50.0]) if step == 3 else pos
+
+    clean = model.rollout(src, 12, cv)["pos"]
+    kicked = model.rollout(src, 12, cv, step_hook=kick)["pos"]
+
+    drift = (kicked - clean)[:, -1, :].abs().max()
+    assert drift < 5.0, f"a single 50 m perturbation still moved the last step by {drift:.1f} m"
 
 
 def test_rollout_hook_is_applied():
     """The Phase 2 Link-Projection hook must actually steer the rollout."""
-    cfg = ModelConfig(d_model=32, nhead=4, num_encoder_layers=1,
-                      num_decoder_layers=1, dim_feedforward=64, dropout=0.0)
-    model = build_model(NUM_FEATURES, cfg).eval()
+    model = _tiny_model()
     src = torch.randn(2, 20, NUM_FEATURES)
     cv = torch.tensor([[15.0, 0.5], [15.0, -0.5]])
 
@@ -97,5 +138,5 @@ def test_rollout_hook_is_applied():
 
     out = model.rollout(src, 8, cv, step_hook=snap_to_centreline)
     assert torch.allclose(out["pos"][:, :, 1], torch.zeros(2, 8), atol=1e-6)
-    # And the returned displacements must still integrate to those positions.
+    # The reported displacements must still integrate back to those positions.
     assert torch.allclose(out["delta"].cumsum(1), out["pos"], atol=1e-4)

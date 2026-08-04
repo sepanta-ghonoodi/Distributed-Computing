@@ -24,23 +24,24 @@ from .models.seq2seq_transformer import StepHook, TrajectoryTransformer
 # Loss
 # ---------------------------------------------------------------------------
 def trajectory_loss(
-    pred_delta: torch.Tensor, tgt_delta: torch.Tensor, kind: str = "mse_position"
+    pred_pos: torch.Tensor, tgt_pos: torch.Tensor, kind: str = "huber_position"
 ) -> torch.Tensor:
-    """Phase 1 reconstruction loss (metres).
+    """Phase 1 reconstruction loss on absolute agent-frame positions (metres).
 
-    'mse_position' integrates the displacements first, so an error at step t is
-    penalised at every subsequent step too. That is exactly the drift behaviour
-    ADE measures, and it is what makes the Phase 1 baseline a *fair* baseline to
-    compare the later constrained models against.
+    All three options are computed on positions rather than displacements,
+    because position error is what ADE/FDE measure and what accumulates.
+
+    'huber_position' is the default: plain MSE is dominated by the handful of
+    hard-braking windows where the constant-velocity anchor is off by 100 m, and
+    those outliers were drowning out the ordinary cruising cases. 'ade' is the
+    evaluation metric used directly as a loss.
     """
-    if kind == "mse_delta":
-        return nn.functional.mse_loss(pred_delta, tgt_delta)
     if kind == "mse_position":
-        return nn.functional.mse_loss(pred_delta.cumsum(1), tgt_delta.cumsum(1))
+        return nn.functional.mse_loss(pred_pos, tgt_pos)
     if kind == "huber_position":
-        return nn.functional.smooth_l1_loss(
-            pred_delta.cumsum(1), tgt_delta.cumsum(1), beta=1.0
-        )
+        return nn.functional.smooth_l1_loss(pred_pos, tgt_pos, beta=1.0)
+    if kind == "ade":
+        return torch.linalg.vector_norm(pred_pos - tgt_pos, dim=-1).mean()
     raise ValueError(f"Unknown loss '{kind}'")
 
 
@@ -82,16 +83,23 @@ def train_one_epoch(
         optimizer.zero_grad(set_to_none=True)
 
         with torch.autocast(device_type=device.type, enabled=cfg.amp and device.type == "cuda"):
-            pred_delta = model(batch["src"], batch["tgt_in"], batch["cv_delta"])
-            loss = trajectory_loss(pred_delta, batch["tgt_delta"], cfg.loss)
+            pred_pos = model(batch["src"], batch["tgt_pos"], batch["cv_delta"])
+            loss = trajectory_loss(pred_pos, batch["tgt_pos"], cfg.loss)
 
         scaler.scale(loss).backward()
         if cfg.grad_clip > 0:
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
+
+        # GradScaler skips optimizer.step() on the iterations where it detects
+        # inf/nan and halves the scale. Advancing the LR schedule on a skipped
+        # step is what produces the "lr_scheduler.step() before optimizer.step()"
+        # warning, so gate the scheduler on whether the step actually happened.
+        scale_before = scaler.get_scale()
         scaler.step(optimizer)
         scaler.update()
-        scheduler.step()
+        if scaler.get_scale() >= scale_before:
+            scheduler.step()
 
         bs = batch["src"].size(0)
         running += loss.item() * bs

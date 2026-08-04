@@ -71,13 +71,13 @@ class ModelConfig:
     # Pre-LN ("norm_first") trains far more stably without a long warmup.
     norm_first: bool = True
 
-    # Add the network output to a constant-velocity extrapolation of the last
+    # Anchor the prediction on a constant-velocity extrapolation of the last
     # observed step (the "History Message" of PIT-IDM). With the head zero-
     # initialised the model starts as an exact constant-velocity predictor.
     use_cv_prior: bool = True
-    # Typical magnitude of a per-step displacement *residual*, in metres. Used
-    # to keep decoder inputs and head outputs at O(1).
-    delta_scale: float = 3.0
+    # Typical magnitude of the *offset* from that anchor, in metres, over the
+    # full horizon. Only used to keep decoder inputs and head outputs at O(1).
+    output_scale: float = 10.0
 
 
 @dataclass
@@ -89,10 +89,10 @@ class TrainConfig:
     warmup_steps: int = 500
     grad_clip: float = 1.0
 
-    # "mse_position" optimises cumulative position error directly (aligned with
-    # ADE/FDE); "mse_delta" optimises per-step displacement (better conditioned,
-    # but tolerates slow drift). Phase 1 baseline uses position.
-    loss: str = "mse_position"
+    # Loss on absolute positions, which is what ADE/FDE measure.
+    # "huber_position" is far less sensitive to the rare hard-braking window
+    # than plain MSE, which otherwise lets a handful of outliers dominate.
+    loss: str = "huber_position"
 
     teacher_forcing: bool = True
     num_workers: int = 4

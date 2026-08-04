@@ -94,6 +94,10 @@ def main() -> None:
     )
 
     # --- reference point ----------------------------------------------------
+    # Every epoch is compared against this. A learned model that loses to
+    # straight-line extrapolation is broken, not merely undertrained, and that
+    # needs to be obvious from the log rather than something you notice after
+    # 60 epochs.
     cv = constant_velocity_baseline(val_loader, cfg.data.target_hz, device)
     print(f"const-velocity baseline | ADE {cv['ade']:.2f} m  FDE {cv['fde']:.2f} m")
 
@@ -111,10 +115,11 @@ def main() -> None:
                 pred_len=cfg.data.pred_len, target_hz=cfg.data.target_hz, desc="val",
             )
             stats.update({f"val_{k}": v for k, v in val.items()})
+            flag = "  <-- WORSE THAN CONSTANT VELOCITY" if val["ade"] > cv["ade"] else ""
             print(
                 f"epoch {epoch:03d} | train {stats['train_loss']:.3f} "
                 f"| val ADE {val['ade']:.2f} m  FDE {val['fde']:.2f} m "
-                f"| lat {val['rmse_lat']:.2f}  long {val['rmse_long']:.2f}"
+                f"| lat {val['rmse_lat']:.2f}  long {val['rmse_long']:.2f}{flag}"
             )
 
             if val["ade"] < best_ade - 1e-4:

@@ -32,7 +32,7 @@ model:
   activation: gelu
   norm_first: true
   use_cv_prior: true
-  delta_scale: 3.0
+  output_scale: 10.0
 
 train:
   batch_size: 64
@@ -41,7 +41,7 @@ train:
   weight_decay: 1.0e-4
   warmup_steps: 500
   grad_clip: 1.0
-  loss: mse_position    # mse_delta | mse_position | huber_position
+  loss: huber_position    # huber_position | mse_position | ade
   teacher_forcing: true
   num_workers: 4
   device: cuda
