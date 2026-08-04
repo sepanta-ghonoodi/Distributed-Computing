@@ -33,6 +33,24 @@ def compute_kinematics(df: pd.DataFrame, dt: float, smooth: bool = True) -> pd.D
         dt: seconds between consecutive frames.
         smooth: apply a Savitzky-Golay filter to x/y before differentiating.
     """
+    # np.gradient needs at least two samples. Real data has vehicles that enter
+    # the camera's field of view for a fraction of a second, or that survive
+    # resampling as a single frame; the synthetic simulator has none, which is
+    # why this only surfaced on NGSIM. Such tracks carry no usable kinematics
+    # and are far shorter than one window, so drop them here rather than
+    # special-casing them through every downstream stage.
+    counts = df.groupby(S.VEHICLE_ID)[S.FRAME].transform("size")
+    too_short = counts < 3
+    if bool(too_short.any()):
+        n_veh = df.loc[too_short, S.VEHICLE_ID].nunique()
+        print(
+            f"  dropping {n_veh:,} vehicle(s) with < 3 frames "
+            f"({int(too_short.sum()):,} rows) — too short to differentiate"
+        )
+        df = df[~too_short]
+    if df.empty:
+        raise ValueError("No vehicle has enough frames to compute kinematics")
+
     out = []
     for vid, g in df.sort_values([S.VEHICLE_ID, S.FRAME]).groupby(S.VEHICLE_ID, sort=False):
         g = g.copy()

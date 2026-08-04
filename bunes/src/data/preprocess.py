@@ -103,7 +103,10 @@ def load_ngsim(
         site = df[cols["location"]].astype(str).str.strip().str.lower()
         wanted = [s.lower() for s in (locations or NGSIM_FREEWAY_SITES)]
         keep = site.isin(wanted)
-        print(f"  sites present: {sorted(site.unique())} -> keeping {wanted}")
+        present = sorted(site.unique())
+        print(
+            f"  sites present: {present} -> keeping {sorted(set(present) & set(wanted))}"
+        )
         df, site = df[keep].copy(), site[keep]
         if df.empty:
             raise ValueError(f"No rows left after filtering to sites {wanted}")
