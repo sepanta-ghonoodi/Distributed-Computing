@@ -110,6 +110,7 @@ def train_one_epoch(
                     dt=dt,
                     p=idm_params,
                     min_gap=physics.min_gap,
+                    horizon_steps=physics.horizon_steps,
                 )
                 loss = data_loss + physics.weight * phy_loss
             else:
@@ -135,8 +136,8 @@ def train_one_epoch(
         bs = batch["src"].size(0)
         running += loss.item() * bs
         running_data += data_loss.item() * bs
-        running_phy += float(phy_loss) * bs
-        running_valid += float(valid) * bs
+        running_phy += phy_loss.detach().item() * bs
+        running_valid += valid.detach().item() * bs
         n += bs
         bar.set_postfix(
             loss=f"{running / max(1, n):.3f}",

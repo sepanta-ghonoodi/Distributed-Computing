@@ -123,6 +123,10 @@ class PhysicsConfig:
     delta: float = 4.0
     a_clip: float = 6.0
     min_gap: float = 1.0
+    # Apply the IDM term only to the first N predicted steps. The leader is
+    # rolled forward at constant speed, which is defensible for a few seconds
+    # and badly wrong by 30 s. None = whole horizon.
+    horizon_steps: int | None = None
 
 
 @dataclass

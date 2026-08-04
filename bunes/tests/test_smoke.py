@@ -179,6 +179,39 @@ def test_idm_loss_prefers_a_physically_consistent_trajectory():
     assert steady_loss < speeding_loss
 
 
+def test_idm_horizon_limit_ignores_later_steps():
+    """`horizon_steps` must actually confine the penalty to the early horizon.
+
+    The leader is rolled forward at constant speed, so the prescribed
+    acceleration is only meaningful for the first few seconds. Corrupting the
+    tail of a trajectory must therefore not change a horizon-limited loss.
+    """
+    from src.physics.idm import IDMParams, idm_physics_loss
+
+    T = 40
+    cv = torch.tensor([[12.0, 0.0]])
+    steps = torch.arange(1, T + 1, dtype=torch.float32).view(1, -1, 1)
+    good = cv.unsqueeze(1) * steps
+
+    wrecked = good.clone()
+    wrecked[:, 10:, 0] += torch.linspace(0.0, 300.0, T - 10)
+
+    kwargs = dict(
+        cv_delta=cv,
+        leader_gap=torch.tensor([30.0]),
+        leader_speed=torch.tensor([24.0]),
+        desired_speed=torch.tensor([24.0]),
+        dt=0.5,
+        p=IDMParams(),
+    )
+    limited_good, _ = idm_physics_loss(pred_pos=good, horizon_steps=10, **kwargs)
+    limited_bad, _ = idm_physics_loss(pred_pos=wrecked, horizon_steps=10, **kwargs)
+    full_bad, _ = idm_physics_loss(pred_pos=wrecked, horizon_steps=None, **kwargs)
+
+    assert torch.allclose(limited_good, limited_bad, atol=1e-6)
+    assert full_bad > limited_bad
+
+
 def test_idm_loss_is_zero_without_a_leader():
     """Windows with no preceding vehicle must be masked out, not fed NaN."""
     from src.physics.idm import IDMParams, idm_physics_loss

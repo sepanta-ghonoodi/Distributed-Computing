@@ -51,7 +51,14 @@ physics:
   # The only difference from the control run. Watch the two printed loss
   # components: if "IDM" dwarfs "data", lower this; if it stays near zero, the
   # regulariser is doing nothing and it should go up.
-  weight: 0.3
+  # First attempt used weight 0.3 over the whole 30 s horizon and made ADE
+  # 13% WORSE (4.98 -> 5.63). The IDM term plateaued at ~2.0, i.e. ~1.4 m/s^2
+  # of disagreement -- the prescribed acceleration was simply wrong, because
+  # the leader is assumed to hold its speed for the full 30 s. Restricting
+  # the term to the first 5 s keeps it where that assumption is defensible,
+  # and the lower weight stops it from dominating the data term.
+  weight: 0.1
+  horizon_steps: 10        # 5 s at 2 Hz
   # Generic literature values, deliberately NOT the simulator's
   # (a=1.4, b=2.0, s0=2.0, T=1.5), so the loss cannot just recover the
   # data-generating process.

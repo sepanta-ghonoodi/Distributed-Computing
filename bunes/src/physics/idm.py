@@ -106,6 +106,7 @@ def idm_physics_loss(
     dt: float,
     p: IDMParams,
     min_gap: float = 1.0,
+    horizon_steps: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Penalise predicted accelerations that disagree with IDM.
 
@@ -118,6 +119,14 @@ def idm_physics_loss(
         min_gap:       windows with a smaller (or missing) gap are excluded —
                        they are usually a data artefact rather than real
                        tailgating, and the 1/gap^2 term would dominate.
+        horizon_steps: apply the penalty only to the first N predicted steps.
+                       The leader is rolled forward at constant speed, and that
+                       assumption decays fast: at 30 s it can be tens of metres
+                       out, so IDM is then prescribing an acceleration for a gap
+                       the leader never had. Restricting the term to the part of
+                       the horizon where the assumption still holds is the
+                       difference between a regulariser and a source of noise.
+                       None applies it over the whole horizon.
 
     Returns (loss, valid_fraction). The loss is 0 when no window in the batch
     has a usable leader.
@@ -144,6 +153,7 @@ def idm_physics_loss(
         zero = pred_pos.sum() * 0.0        # keeps the graph connected
         return zero, torch.zeros((), device=pred_pos.device)
 
-    per_sample = (a - a_idm).pow(2).mean(dim=1)                 # (B,)
+    k = t if horizon_steps is None else min(horizon_steps, t)
+    per_sample = (a[:, :k] - a_idm[:, :k]).pow(2).mean(dim=1)   # (B,)
     loss = per_sample[valid].mean()
     return loss, valid.float().mean()
