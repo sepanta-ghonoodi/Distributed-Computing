@@ -45,6 +45,11 @@ class WindowBundle:
     theta: np.ndarray       # (N,)    world heading of the agent-frame +x axis
     vehicle_id: np.ndarray  # (N,)
     start_frame: np.ndarray  # (N,)
+    # Leader state at the last observed step, for the Phase 3 IDM regulariser.
+    # NaN where the vehicle has no preceding vehicle.
+    leader_gap: np.ndarray   # (N,)  bumper-to-bumper gap [m]
+    leader_speed: np.ndarray  # (N,) preceding vehicle speed [m/s]
+    desired_speed: np.ndarray  # (N,) free-flow speed target [m/s]
 
     def __len__(self) -> int:
         return len(self.features)
@@ -81,7 +86,7 @@ def build_windows(df: pd.DataFrame, cfg: DataConfig) -> WindowBundle:
     meta_vid: list[np.ndarray] = []
     meta_frame: list[np.ndarray] = []
 
-    cols = [S.X, S.Y, S.SPEED, S.ACCEL, S.HEADING, "lane_offset"]
+    cols = [S.X, S.Y, S.SPEED, S.ACCEL, S.HEADING, "lane_offset", S.GAP, S.LEADER_SPEED]
     for vid, g in df.sort_values([S.VEHICLE_ID, S.FRAME]).groupby(S.VEHICLE_ID, sort=False):
         frames = g[S.FRAME].to_numpy()
         raw = g[cols].to_numpy(dtype=np.float64)
@@ -110,6 +115,8 @@ def build_windows(df: pd.DataFrame, cfg: DataConfig) -> WindowBundle:
     start_frame = np.concatenate(meta_frame, 0)
 
     # --- drop near-stationary windows (no useful long-horizon signal) ------
+    # NaN-safe: gap/leader_speed are NaN whenever there is no preceding vehicle,
+    # and nanmean would otherwise be needed everywhere downstream.
     keep = win[:, :, 2].mean(1) >= cfg.min_mean_speed
     win, vehicle_id, start_frame = win[keep], vehicle_id[keep], start_frame[keep]
 
@@ -155,6 +162,13 @@ def build_windows(df: pd.DataFrame, cfg: DataConfig) -> WindowBundle:
         np.concatenate([np.zeros_like(fut_pos[:, :1, :]), fut_pos], axis=1), axis=1
     ).astype(np.float32)
 
+    # --- leader state at the last observed step (Phase 3) ------------------
+    # The desired free-flow speed is not observable, so it is approximated by
+    # the fastest the ego actually travelled during the observation window —
+    # a vehicle held up behind a slow leader still reveals its preferred speed
+    # in the moments before it closed the gap.
+    desired_speed = np.maximum(speed[:, :obs_len].max(axis=1), 5.0)
+
     return WindowBundle(
         features=features,
         fut_delta=fut_delta,
@@ -163,6 +177,9 @@ def build_windows(df: pd.DataFrame, cfg: DataConfig) -> WindowBundle:
         theta=theta.astype(np.float32),
         vehicle_id=vehicle_id,
         start_frame=start_frame,
+        leader_gap=win[:, obs_len - 1, 6].astype(np.float32),
+        leader_speed=win[:, obs_len - 1, 7].astype(np.float32),
+        desired_speed=desired_speed.astype(np.float32),
     )
 
 
@@ -225,14 +242,23 @@ class HighwayWindowDataset(Dataset):
             "cv_delta": torch.from_numpy(self.cv_delta[i]),
             "origin": torch.from_numpy(self.b.origin[i]),
             "theta": torch.tensor(self.b.theta[i]),
+            # NaN (no leader) survives to the loss, which masks on it.
+            "leader_gap": torch.tensor(self.b.leader_gap[i]),
+            "leader_speed": torch.tensor(self.b.leader_speed[i]),
+            "desired_speed": torch.tensor(self.b.desired_speed[i]),
         }
 
 
 # ---------------------------------------------------------------------------
 # Entry point with on-disk caching
 # ---------------------------------------------------------------------------
+# Bumped whenever WindowBundle gains or changes a field, so a stale cache from
+# an earlier schema fails to be reused rather than loading with missing keys.
+_CACHE_VERSION = 2
+
+
 def _cache_key(cfg: DataConfig) -> str:
-    relevant = {
+    relevant = {"_v": _CACHE_VERSION} | {
         k: getattr(cfg, k)
         for k in (
             "unified_path", "target_hz", "obs_seconds", "pred_seconds",

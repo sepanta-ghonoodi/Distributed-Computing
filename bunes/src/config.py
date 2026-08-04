@@ -106,10 +106,31 @@ class TrainConfig:
 
 
 @dataclass
+class PhysicsConfig:
+    """Phase 3 — IDM regulariser.
+
+    `weight` of 0 disables the term entirely, which is how the Phase 1/2
+    baseline is trained under otherwise identical settings.
+    """
+
+    weight: float = 0.0
+    # Generic literature values, deliberately different from the parameters the
+    # synthetic simulator uses — see src/physics/idm.py for why.
+    a_max: float = 1.2
+    b_comf: float = 2.2
+    s0: float = 2.5
+    t_headway: float = 1.4
+    delta: float = 4.0
+    a_clip: float = 6.0
+    min_gap: float = 1.0
+
+
+@dataclass
 class Config:
     data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
+    physics: PhysicsConfig = field(default_factory=PhysicsConfig)
 
     @staticmethod
     def from_yaml(path: str | Path) -> "Config":
@@ -119,6 +140,7 @@ class Config:
             data=_build(DataConfig, raw.get("data", {}), "data"),
             model=_build(ModelConfig, raw.get("model", {}), "model"),
             train=_build(TrainConfig, raw.get("train", {}), "train"),
+            physics=_build(PhysicsConfig, raw.get("physics", {}), "physics"),
         )
 
     def to_dict(self) -> dict[str, Any]:

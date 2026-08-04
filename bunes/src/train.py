@@ -107,6 +107,7 @@ def main() -> None:
         stats = train_one_epoch(
             model, train_loader, optimizer, scheduler, grad_scaler,
             cfg.train, device, epoch,
+            physics=cfg.physics, dt=cfg.data.dt,
         )
 
         if epoch % cfg.train.eval_every == 0:
@@ -116,8 +117,13 @@ def main() -> None:
             )
             stats.update({f"val_{k}": v for k, v in val.items()})
             flag = "  <-- WORSE THAN CONSTANT VELOCITY" if val["ade"] > cv["ade"] else ""
+            phy = (
+                f" (data {stats['train_data_loss']:.3f} + IDM {stats['train_phy_loss']:.3f})"
+                if cfg.physics.weight > 0
+                else ""
+            )
             print(
-                f"epoch {epoch:03d} | train {stats['train_loss']:.3f} "
+                f"epoch {epoch:03d} | train {stats['train_loss']:.3f}{phy} "
                 f"| val ADE {val['ade']:.2f} m  FDE {val['fde']:.2f} m "
                 f"| lat {val['rmse_lat']:.2f}  long {val['rmse_long']:.2f}{flag}"
             )

@@ -15,9 +15,10 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from .config import TrainConfig
+from .config import PhysicsConfig, TrainConfig
 from .metrics import full_report
 from .models.seq2seq_transformer import StepHook, TrajectoryTransformer
+from .physics.idm import IDMParams, idm_physics_loss
 
 
 # ---------------------------------------------------------------------------
@@ -73,9 +74,20 @@ def train_one_epoch(
     cfg: TrainConfig,
     device: torch.device,
     epoch: int,
+    physics: PhysicsConfig | None = None,
+    dt: float = 0.5,
 ) -> dict[str, float]:
     model.train()
-    running, n = 0.0, 0
+    running, running_data, running_phy, running_valid, n = 0.0, 0.0, 0.0, 0.0, 0
+    use_physics = physics is not None and physics.weight > 0.0
+    idm_params = (
+        IDMParams(
+            a_max=physics.a_max, b_comf=physics.b_comf, s0=physics.s0,
+            t_headway=physics.t_headway, delta=physics.delta, a_clip=physics.a_clip,
+        )
+        if use_physics
+        else None
+    )
     bar = tqdm(loader, desc=f"epoch {epoch:03d} [train]", leave=False)
 
     for batch in bar:
@@ -84,7 +96,26 @@ def train_one_epoch(
 
         with torch.autocast(device_type=device.type, enabled=cfg.amp and device.type == "cuda"):
             pred_pos = model(batch["src"], batch["tgt_pos"], batch["cv_delta"])
-            loss = trajectory_loss(pred_pos, batch["tgt_pos"], cfg.loss)
+            data_loss = trajectory_loss(pred_pos, batch["tgt_pos"], cfg.loss)
+
+            if use_physics:
+                # Computed in fp32: the IDM term divides by the gap and raises
+                # a speed ratio to the 4th power, both of which overflow fp16.
+                phy_loss, valid = idm_physics_loss(
+                    pred_pos.float(),
+                    batch["cv_delta"].float(),
+                    batch["leader_gap"].float(),
+                    batch["leader_speed"].float(),
+                    batch["desired_speed"].float(),
+                    dt=dt,
+                    p=idm_params,
+                    min_gap=physics.min_gap,
+                )
+                loss = data_loss + physics.weight * phy_loss
+            else:
+                phy_loss = torch.zeros((), device=device)
+                valid = torch.zeros((), device=device)
+                loss = data_loss
 
         scaler.scale(loss).backward()
         if cfg.grad_clip > 0:
@@ -103,10 +134,24 @@ def train_one_epoch(
 
         bs = batch["src"].size(0)
         running += loss.item() * bs
+        running_data += data_loss.item() * bs
+        running_phy += float(phy_loss) * bs
+        running_valid += float(valid) * bs
         n += bs
-        bar.set_postfix(loss=f"{running / max(1, n):.3f}", lr=f"{scheduler.get_last_lr()[0]:.2e}")
+        bar.set_postfix(
+            loss=f"{running / max(1, n):.3f}",
+            phy=f"{running_phy / max(1, n):.3f}",
+            lr=f"{scheduler.get_last_lr()[0]:.2e}",
+        )
 
-    return {"train_loss": running / max(1, n)}
+    return {
+        "train_loss": running / max(1, n),
+        "train_data_loss": running_data / max(1, n),
+        # Reported unweighted, so the two terms stay comparable across runs with
+        # different physics weights.
+        "train_phy_loss": running_phy / max(1, n),
+        "leader_coverage": running_valid / max(1, n),
+    }
 
 
 @torch.no_grad()

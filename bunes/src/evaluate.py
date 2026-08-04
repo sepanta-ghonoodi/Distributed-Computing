@@ -92,11 +92,13 @@ def main() -> None:
 
 
 def _config_from_dict(d: dict) -> Config:
-    from .config import DataConfig, ModelConfig, TrainConfig
+    from .config import DataConfig, ModelConfig, PhysicsConfig, TrainConfig
     return Config(
         data=DataConfig(**d["data"]),
         model=ModelConfig(**d["model"]),
         train=TrainConfig(**d["train"]),
+        # Checkpoints written before Phase 3 have no physics section.
+        physics=PhysicsConfig(**d.get("physics", {})),
     )
 
 

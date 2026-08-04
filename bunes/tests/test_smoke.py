@@ -126,6 +126,77 @@ def test_rollout_does_not_integrate_its_own_error():
     assert drift < 5.0, f"a single 50 m perturbation still moved the last step by {drift:.1f} m"
 
 
+def test_idm_equilibrium_gives_zero_acceleration():
+    """A vehicle at its desired speed with no leader must be told to coast.
+
+    If this drifts, the regulariser starts pushing every free-flowing vehicle
+    to accelerate or brake, which would corrupt the majority of windows.
+    """
+    from src.physics.idm import IDMParams, idm_acceleration
+
+    p = IDMParams()
+    v = torch.tensor([30.0])
+    a = idm_acceleration(v, v0=v.clone(), gap=torch.tensor([1e6]), dv=torch.zeros(1), p=p)
+    assert a.abs().item() < 1e-3
+
+
+def test_idm_brakes_when_closing_on_a_leader():
+    """Approaching a slower leader must produce a decelerating command."""
+    from src.physics.idm import IDMParams, idm_acceleration
+
+    p = IDMParams()
+    a = idm_acceleration(
+        v=torch.tensor([30.0]), v0=torch.tensor([33.0]),
+        gap=torch.tensor([8.0]), dv=torch.tensor([10.0]), p=p,
+    )
+    assert a.item() < -1.0, f"expected braking, got {a.item():.3f} m/s^2"
+
+
+def test_idm_loss_prefers_a_physically_consistent_trajectory():
+    """A constant-speed rollout behind a matched leader must score better than
+    one that accelerates into the back of it."""
+    from src.physics.idm import IDMParams, idm_physics_loss
+
+    dt, T = 0.5, 20
+    cv = torch.tensor([[12.0, 0.0]])                 # 24 m/s at 2 Hz
+    steps = torch.arange(1, T + 1, dtype=torch.float32).view(1, -1, 1)
+
+    steady = cv.unsqueeze(1) * steps                 # holds 24 m/s
+    speeding = steady * torch.linspace(1.0, 1.6, T).view(1, -1, 1)
+
+    kwargs = dict(
+        cv_delta=cv,
+        leader_gap=torch.tensor([25.0]),
+        leader_speed=torch.tensor([24.0]),           # leader at the same speed
+        desired_speed=torch.tensor([24.0]),
+        dt=dt,
+        p=IDMParams(),
+    )
+    steady_loss, valid = idm_physics_loss(pred_pos=steady, **kwargs)
+    speeding_loss, _ = idm_physics_loss(pred_pos=speeding, **kwargs)
+
+    assert valid.item() == 1.0
+    assert steady_loss < speeding_loss
+
+
+def test_idm_loss_is_zero_without_a_leader():
+    """Windows with no preceding vehicle must be masked out, not fed NaN."""
+    from src.physics.idm import IDMParams, idm_physics_loss
+
+    pos = torch.randn(3, 10, 2).cumsum(1)
+    loss, valid = idm_physics_loss(
+        pred_pos=pos,
+        cv_delta=torch.tensor([[12.0, 0.0]] * 3),
+        leader_gap=torch.full((3,), float("nan")),
+        leader_speed=torch.full((3,), float("nan")),
+        desired_speed=torch.full((3,), 30.0),
+        dt=0.5,
+        p=IDMParams(),
+    )
+    assert torch.isfinite(loss) and loss.item() == 0.0
+    assert valid.item() == 0.0
+
+
 def test_frame_transforms_torch_match_numpy():
     """The torch transforms used by Link Projection must agree with the numpy
     pair used at preprocessing time — otherwise snapping happens in the wrong

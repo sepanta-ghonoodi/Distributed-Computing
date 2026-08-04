@@ -20,7 +20,7 @@ from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
 
-from .config import Config, DataConfig, ModelConfig, TrainConfig
+from .config import Config, DataConfig, ModelConfig, PhysicsConfig, TrainConfig
 from .data.dataset import load_splits
 from .data.schema import NUM_FEATURES
 from .engine import constant_velocity_baseline, evaluate
@@ -37,6 +37,8 @@ def config_from_dict(d: dict) -> Config:
         data=DataConfig(**d["data"]),
         model=ModelConfig(**d["model"]),
         train=TrainConfig(**d["train"]),
+        # Checkpoints written before Phase 3 have no physics section.
+        physics=PhysicsConfig(**d.get("physics", {})),
     )
 
 
