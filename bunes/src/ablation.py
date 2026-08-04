@@ -104,6 +104,13 @@ def main() -> None:
         preds_for_plot[name] = pred
 
     rows["constant velocity"] = constant_velocity_baseline(loader, cfg.data.target_hz, device)
+    # Materialise the CV trajectories too, so it appears on the error curves as
+    # the reference every other line has to beat.
+    cv_pos = []
+    for batch in loader:
+        k = torch.arange(1, cfg.data.pred_len + 1, dtype=torch.float32).view(1, -1, 1)
+        cv_pos.append(batch["cv_delta"].unsqueeze(1) * k)
+    preds_for_plot["constant velocity"] = torch.cat(cv_pos, 0)
 
     # --- print ------------------------------------------------------------
     keys = REPORT_KEYS + ["off_road"]
@@ -121,30 +128,108 @@ def main() -> None:
         json.dump(rows, f, indent=2)
     print(f"\nwrote {out_dir / f'ablation_{args.split}.json'}")
 
+    # --- where does the error actually live? ------------------------------
+    base = rows["Phase 1 (no snap)"]
+    share = base["rmse_lat"] ** 2 / (base["rmse_lat"] ** 2 + base["rmse_long"] ** 2)
+    print(
+        f"\nerror budget | longitudinal {100 * (1 - share):.1f}%  "
+        f"lateral {100 * share:.1f}%\n"
+        "Link Projection can only act on the lateral share, so it drives the\n"
+        "off-road rate to zero without moving ADE. Closing the ADE gap needs a\n"
+        "longitudinal constraint -- that is Phase 3 (IDM)."
+    )
+
     if args.plot:
-        plot_overlay(preds_for_plot, truth, out_dir / f"ablation_{args.split}.png")
+        plot_error_curves(
+            preds_for_plot, truth, cfg.data.target_hz, out_dir / f"ablation_{args.split}.png"
+        )
+        plot_lateral_zoom(
+            preds_for_plot, truth, cfg.data.target_hz,
+            out_dir / f"ablation_lateral_{args.split}.png",
+        )
 
 
-def plot_overlay(preds: dict[str, torch.Tensor], truth, out_path: Path, n: int = 5) -> None:
-    """Overlay every ablation variant on the same ground-truth trajectories."""
+def plot_error_curves(
+    preds: dict[str, torch.Tensor],
+    truth: torch.Tensor,
+    target_hz: float,
+    out_path: Path,
+) -> None:
+    """Error growth over the prediction horizon, split by axis.
+
+    Plotting predicted trajectories in x-y is useless here: a window is ~640 m
+    long and the lateral deviations are under a metre, so every curve collapses
+    onto the same line at any sane aspect ratio. What actually distinguishes
+    the variants is *where* the error lives, so plot the two axes separately
+    against the horizon instead.
+    """
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    n = min(n, len(truth))
-    fig, axes = plt.subplots(n, 1, figsize=(11, 2.1 * n))
+    t = torch.arange(1, truth.size(1) + 1, dtype=torch.float32) / target_hz
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4))
+
+    for name, p in preds.items():
+        resid = p - truth
+        style = dict(lw=2.0, ls="-" if "constant" not in name else "--")
+        axes[0].plot(t, torch.linalg.vector_norm(resid, dim=-1).mean(0), label=name, **style)
+        axes[1].plot(t, resid[..., 0].pow(2).mean(0).sqrt(), label=name, **style)
+        axes[2].plot(t, resid[..., 1].pow(2).mean(0).sqrt(), label=name, **style)
+
+    titles = [
+        "total displacement error",
+        "longitudinal RMSE  (Phase 3 target)",
+        "lateral RMSE  (Phase 2 target)",
+    ]
+    for ax, title in zip(axes, titles):
+        ax.set_title(title, fontsize=10)
+        ax.set_xlabel("prediction horizon [s]")
+        ax.set_ylabel("error [m]")
+        ax.grid(alpha=0.3)
+    axes[0].legend(fontsize=8)
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=130)
+    print(f"wrote {out_path}")
+
+
+def plot_lateral_zoom(
+    preds: dict[str, torch.Tensor],
+    truth: torch.Tensor,
+    target_hz: float,
+    out_path: Path,
+    n: int = 4,
+) -> None:
+    """Lateral coordinate against time, autoscaled, for a few windows.
+
+    Same data as a trajectory plot, but with the longitudinal axis replaced by
+    time so the lateral detail is actually visible.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    # Pick the windows with the most lateral movement — a vehicle holding its
+    # lane for 30 s shows nothing either way.
+    span = (truth[..., 1].max(dim=1).values - truth[..., 1].min(dim=1).values)
+    idx = span.argsort(descending=True)[:n]
+
+    t = torch.arange(1, truth.size(1) + 1, dtype=torch.float32) / target_hz
+    fig, axes = plt.subplots(n, 1, figsize=(10, 2.3 * n), sharex=True)
     axes = [axes] if n == 1 else axes
 
-    for i, ax in enumerate(axes):
-        ax.plot(truth[i, :, 0], truth[i, :, 1], "-", lw=2.5, color="k", label="ground truth")
+    for ax, i in zip(axes, idx):
+        ax.plot(t, truth[i, :, 1], "-", lw=2.5, color="k", label="ground truth")
         for name, p in preds.items():
-            ax.plot(p[i, :, 0], p[i, :, 1], "--", lw=1.6, label=name)
-        ax.scatter([0], [0], marker="o", s=28, color="k", zorder=3)
-        ax.set_ylim(-6, 6)
+            if "constant" in name:
+                continue
+            ax.plot(t, p[i, :, 1], "--", lw=1.6, label=name)
         ax.set_ylabel("lateral [m]")
         ax.grid(alpha=0.3)
-    axes[0].legend(loc="upper left", fontsize=8, ncol=len(preds) + 1)
-    axes[-1].set_xlabel("longitudinal [m] (agent frame)")
+    axes[0].legend(fontsize=8, ncol=3)
+    axes[-1].set_xlabel("prediction horizon [s]")
     fig.tight_layout()
     fig.savefig(out_path, dpi=130)
     print(f"wrote {out_path}")
