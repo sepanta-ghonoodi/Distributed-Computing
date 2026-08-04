@@ -134,26 +134,48 @@ def idm_physics_loss(
     b, t, _ = pred_pos.shape
     v, a = kinematics_from_positions(pred_pos, cv_delta, dt)
 
-    # The leader is rolled forward at constant speed (Paper 2). Its longitudinal
-    # displacement from the ego's origin at step k is gap0 + v_leader * k*dt.
-    steps = torch.arange(1, t + 1, device=pred_pos.device, dtype=pred_pos.dtype) * dt
-    leader_x = leader_gap.unsqueeze(1) + leader_speed.unsqueeze(1) * steps.view(1, -1)
-    gap = leader_x - pred_pos[..., 0]
-    dv = v - leader_speed.unsqueeze(1)
-
-    a_idm = idm_acceleration(v, desired_speed.unsqueeze(1).expand_as(v), gap, dv, p)
-
     valid = (
         torch.isfinite(leader_gap)
         & torch.isfinite(leader_speed)
         & (leader_gap > min_gap)
         & (leader_speed > 0.5)
     )
-    if not bool(valid.any()):
-        zero = pred_pos.sum() * 0.0        # keeps the graph connected
-        return zero, torch.zeros((), device=pred_pos.device)
+    # Substitute harmless placeholders for the missing leader state *before* any
+    # arithmetic. Masking afterwards is not enough: a NaN that has entered the
+    # graph propagates through the backward pass even when the forward value is
+    # later discarded.
+    safe_gap = torch.where(valid, leader_gap, torch.full_like(leader_gap, 50.0))
+    safe_vlead = torch.where(valid, leader_speed, torch.full_like(leader_speed, 20.0))
+    safe_v0 = torch.where(
+        torch.isfinite(desired_speed), desired_speed, torch.full_like(desired_speed, 25.0)
+    )
+
+    # The leader is rolled forward at constant speed (Paper 2). Its longitudinal
+    # displacement from the ego's origin at step k is gap0 + v_leader * k*dt.
+    steps = torch.arange(1, t + 1, device=pred_pos.device, dtype=pred_pos.dtype) * dt
+    leader_x = safe_gap.unsqueeze(1) + safe_vlead.unsqueeze(1) * steps.view(1, -1)
+    gap = leader_x - pred_pos[..., 0]
+    dv = v - safe_vlead.unsqueeze(1)
+
+    # IDM supplies a *target* acceleration; the gradient must flow through the
+    # network's own acceleration only, never through the physics model.
+    # Differentiating the IDM expression is what broke training on NGSIM: the
+    # (s_star/gap)^2 term has derivative 2*s_star^2/gap^3, and in congested
+    # traffic gaps approach the 0.5 m floor, so the gradient reaches thousands.
+    # Every optimiser step was then skipped by GradScaler as non-finite, the
+    # loss sat exactly still for four epochs, and the scale eventually collapsed
+    # into NaN. On the synthetic data, where the mean gap is 44 m, this regime
+    # was never reached.
+    with torch.no_grad():
+        a_idm = idm_acceleration(
+            v.detach(), safe_v0.unsqueeze(1).expand_as(v), gap.detach(), dv.detach(), p
+        )
 
     k = t if horizon_steps is None else min(horizon_steps, t)
     per_sample = (a[:, :k] - a_idm[:, :k]).pow(2).mean(dim=1)   # (B,)
-    loss = per_sample[valid].mean()
-    return loss, valid.float().mean()
+
+    # Masked mean without boolean indexing, so an all-invalid batch still
+    # returns a finite, graph-connected zero.
+    w = valid.to(per_sample.dtype)
+    loss = (per_sample * w).sum() / w.sum().clamp(min=1.0)
+    return loss, w.mean()

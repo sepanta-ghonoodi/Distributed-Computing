@@ -230,6 +230,59 @@ def test_idm_loss_is_zero_without_a_leader():
     assert valid.item() == 0.0
 
 
+def test_idm_gradients_stay_finite_with_tiny_gaps():
+    """Congested traffic must not blow up the gradient.
+
+    The IDM expression contains (s_star/gap)^2, whose derivative is
+    2*s_star^2/gap^3. With NGSIM's small congested gaps that reaches thousands,
+    which made GradScaler skip every optimiser step and eventually produced NaN.
+    The physics target is detached, so this must now be finite and modest.
+    """
+    from src.physics.idm import IDMParams, idm_physics_loss
+
+    pos = (torch.arange(1, 21, dtype=torch.float32).view(1, -1, 1)
+           * torch.tensor([[[6.0, 0.0]]])).repeat(4, 1, 1).requires_grad_(True)
+
+    loss, valid = idm_physics_loss(
+        pred_pos=pos,
+        cv_delta=torch.tensor([[6.0, 0.0]] * 4),
+        # Bumper-to-bumper: right at the clamp floor, the worst case.
+        leader_gap=torch.tensor([0.6, 1.5, 3.0, 40.0]),
+        leader_speed=torch.tensor([2.0, 2.0, 5.0, 20.0]),
+        desired_speed=torch.tensor([25.0] * 4),
+        dt=0.5,
+        p=IDMParams(),
+    )
+    loss.backward()
+
+    assert torch.isfinite(loss), "loss went non-finite on congested gaps"
+    assert torch.isfinite(pos.grad).all(), "gradient went non-finite on congested gaps"
+    assert pos.grad.abs().max() < 1e3, f"gradient still huge: {pos.grad.abs().max():.1f}"
+
+
+def test_idm_partial_leader_coverage_does_not_poison_the_batch():
+    """One NaN leader must not turn the whole batch's loss or gradient to NaN."""
+    from src.physics.idm import IDMParams, idm_physics_loss
+
+    pos = (torch.arange(1, 21, dtype=torch.float32).view(1, -1, 1)
+           * torch.tensor([[[8.0, 0.0]]])).repeat(3, 1, 1).requires_grad_(True)
+
+    loss, valid = idm_physics_loss(
+        pred_pos=pos,
+        cv_delta=torch.tensor([[8.0, 0.0]] * 3),
+        leader_gap=torch.tensor([25.0, float("nan"), 30.0]),
+        leader_speed=torch.tensor([15.0, float("nan"), 16.0]),
+        desired_speed=torch.tensor([25.0, 25.0, 25.0]),
+        dt=0.5,
+        p=IDMParams(),
+    )
+    loss.backward()
+
+    assert torch.isfinite(loss)
+    assert torch.isfinite(pos.grad).all()
+    assert abs(valid.item() - 2 / 3) < 1e-6
+
+
 def test_frame_transforms_torch_match_numpy():
     """The torch transforms used by Link Projection must agree with the numpy
     pair used at preprocessing time — otherwise snapping happens in the wrong
