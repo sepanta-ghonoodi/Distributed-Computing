@@ -11,7 +11,10 @@ data:
   target_hz: 2.0
   obs_seconds: 10.0
   pred_seconds: 30.0
-  window_stride: 4
+  # Halved vs the synthetic configs: a 15-minute NGSIM slice yields ~950
+  # usable vehicles against the simulator's 200, so denser striding keeps
+  # the window count in the same ballpark.
+  window_stride: 2
   min_mean_speed: 1.0
   val_fraction: 0.15
   test_fraction: 0.15
