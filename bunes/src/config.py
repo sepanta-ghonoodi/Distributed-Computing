@@ -95,6 +95,17 @@ class TrainConfig:
     loss: str = "huber_position"
 
     teacher_forcing: bool = True
+
+    # --- Phase 5a: scheduled sampling -------------------------------------
+    # Probability of feeding the decoder its *own* prediction instead of the
+    # ground truth. 0 disables it and reproduces plain teacher forcing.
+    #
+    # Motivation is measured, not assumed: on NGSIM the teacher-forced training
+    # loss reaches 0.674 while the free-running rollout scores ADE 34 m. The
+    # model is never asked during training to consume its own 60-step output,
+    # which is exactly what inference requires.
+    scheduled_sampling: float = 0.0
+    ss_ramp_epochs: int = 10     # epochs over which the probability ramps to max
     num_workers: int = 4
     device: str = "cuda"
     amp: bool = True

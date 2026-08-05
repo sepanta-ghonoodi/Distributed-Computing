@@ -122,6 +122,7 @@ def main() -> None:
                 if cfg.physics.weight > 0
                 else ""
             )
+            phy += f" [ss {stats['ss_prob']:.2f}]" if cfg.train.scheduled_sampling > 0 else ""
             print(
                 f"epoch {epoch:03d} | train {stats['train_loss']:.3f}{phy} "
                 f"| val ADE {val['ade']:.2f} m  FDE {val['fde']:.2f} m "

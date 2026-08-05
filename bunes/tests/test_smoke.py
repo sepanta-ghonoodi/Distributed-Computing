@@ -86,6 +86,30 @@ def test_teacher_forcing_matches_rollout():
     assert torch.allclose(forced, free["pos"], atol=1e-5)
 
 
+def test_scheduled_sampling_mixes_without_leaking_gradients():
+    """The sampled decoder input must be detached and must not change the target.
+
+    If the model's own guess reached the loss term instead of only the decoder
+    input, the model could minimise the loss by agreeing with itself rather
+    than with the data.
+    """
+    torch.manual_seed(0)
+    model = _tiny_model()
+    src = torch.randn(2, 20, NUM_FEATURES)
+    cv = torch.tensor([[12.0, 0.0], [12.0, 0.0]])
+    tgt = torch.randn(2, 8, 2).cumsum(1)
+
+    with torch.no_grad():
+        guess = model(src, tgt, cv)
+    take = torch.rand_like(guess[..., :1]) < 0.5
+    mixed = torch.where(take, guess.detach(), tgt)
+
+    assert not mixed.requires_grad
+    # Wherever the mask is False the ground truth must survive untouched.
+    keep = (~take).expand_as(tgt)
+    assert torch.equal(mixed[keep], tgt[keep])
+
+
 def test_untrained_model_is_constant_velocity():
     """The zero-initialised head must make the model an exact CV predictor.
 

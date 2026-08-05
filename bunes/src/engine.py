@@ -88,6 +88,11 @@ def train_one_epoch(
         if use_physics
         else None
     )
+    # Scheduled sampling probability for this epoch, ramped from 0 so the model
+    # first learns the mapping at all and only then learns to survive its own
+    # mistakes.
+    ss_p = cfg.scheduled_sampling * min(1.0, epoch / max(1, cfg.ss_ramp_epochs))
+
     bar = tqdm(loader, desc=f"epoch {epoch:03d} [train]", leave=False)
 
     for batch in bar:
@@ -95,7 +100,25 @@ def train_one_epoch(
         optimizer.zero_grad(set_to_none=True)
 
         with torch.autocast(device_type=device.type, enabled=cfg.amp and device.type == "cuda"):
-            pred_pos = model(batch["src"], batch["tgt_pos"], batch["cv_delta"])
+            decoder_truth = batch["tgt_pos"]
+
+            if ss_p > 0.0:
+                # Two-pass scheduled sampling. A true free-running rollout would
+                # need 60 sequential decoder passes *with* gradients — roughly
+                # 60x the cost. Instead take one teacher-forced pass without
+                # gradients, then mix its output into the decoder input of the
+                # second pass. That is 2x the cost and still exposes the model
+                # to its own errors at every position; the errors are milder
+                # than a true rollout's, so this is a partial fix, not a
+                # complete one.
+                with torch.no_grad():
+                    guess = model(batch["src"], batch["tgt_pos"], batch["cv_delta"])
+                take_guess = torch.rand_like(guess[..., :1]) < ss_p
+                decoder_truth = torch.where(take_guess, guess.detach(), batch["tgt_pos"])
+
+            # The loss is always measured against the real future, only the
+            # decoder's *input* is corrupted.
+            pred_pos = model(batch["src"], decoder_truth, batch["cv_delta"])
             data_loss = trajectory_loss(pred_pos, batch["tgt_pos"], cfg.loss)
 
             if use_physics:
@@ -148,6 +171,7 @@ def train_one_epoch(
     return {
         "train_loss": running / max(1, n),
         "train_data_loss": running_data / max(1, n),
+        "ss_prob": ss_p,
         # Reported unweighted, so the two terms stay comparable across runs with
         # different physics weights.
         "train_phy_loss": running_phy / max(1, n),
