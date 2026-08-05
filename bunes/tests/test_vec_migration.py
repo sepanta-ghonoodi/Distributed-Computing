@@ -80,6 +80,35 @@ def test_missing_a_handover_degrades_to_reactive():
     assert m["handover_detect_rate"] == 0.0
 
 
+def test_margin_trades_interruption_for_residency():
+    """A safety margin must remove lateness and pay for it in wasted residency."""
+    t_true = torch.tensor([10.0, 10.0])
+    t_pred = torch.tensor([12.0, 12.0])          # 2 s late
+
+    no_margin = migration_metrics(t_pred, torch.ones(2, dtype=torch.bool), t_true, 3.0)
+    with_margin = migration_metrics(
+        t_pred, torch.ones(2, dtype=torch.bool), t_true, 3.0, margin=2.0
+    )
+    assert abs(no_margin["mean_interruption_s"] - 2.0) < 1e-6
+    assert with_margin["mean_interruption_s"] == 0.0
+    assert with_margin["mean_premature_s"] == 0.0
+
+    generous = migration_metrics(
+        t_pred, torch.ones(2, dtype=torch.bool), t_true, 3.0, margin=5.0
+    )
+    assert generous["mean_interruption_s"] == 0.0
+    assert abs(generous["mean_premature_s"] - 3.0) < 1e-6
+
+
+def test_margin_cannot_rescue_an_undetected_handover():
+    """Being early is meaningless when the trigger never fires."""
+    t_true = torch.tensor([10.0])
+    m = migration_metrics(
+        torch.zeros(1), torch.zeros(1, dtype=torch.bool), t_true, 3.0, margin=5.0
+    )
+    assert m["mean_interruption_s"] == 3.0
+
+
 def test_to_world_round_trips_the_agent_frame():
     """RSUs are fixed infrastructure, so the frame conversion must be exact."""
     from src.map.highway import to_agent_frame_t

@@ -40,6 +40,7 @@ def migration_metrics(
     predicted: torch.Tensor,
     t_true: torch.Tensor,
     t_migration: float,
+    margin: float = 0.0,
 ) -> dict[str, float]:
     """Evaluate one predictor's migration decisions.
 
@@ -49,12 +50,21 @@ def migration_metrics(
         t_pred:    (N,) predicted handover time [s]
         predicted: (N,) whether this predictor saw a handover at all
         t_true:    (N,) actual handover time [s]
+        margin:    safety lead time [s]. The cost here is asymmetric — being
+            early only wastes residency, being late interrupts the service — so
+            a policy that simply triggers at the predicted time is leaving
+            interruption on the table. Starting `margin` seconds earlier trades
+            residency for interruption, and the right value depends on how
+            accurate the predictor is: a predictor with lower ETA error needs
+            less margin to reach the same interruption, which is how prediction
+            accuracy is supposed to turn into system benefit.
     """
     t_m = torch.full_like(t_true, t_migration)
 
     # A missed handover means the trigger never fires: fall back to reacting at
-    # the crossing itself.
-    completes = torch.where(predicted, t_pred, t_true + t_m)
+    # the crossing itself. The margin cannot help there — there is nothing to
+    # be early about.
+    completes = torch.where(predicted, t_pred - margin, t_true + t_m)
 
     interruption = (completes - t_true).clamp(min=0.0, max=t_migration)
     premature = (t_true - completes).clamp(min=0.0)

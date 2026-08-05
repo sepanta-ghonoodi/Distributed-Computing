@@ -65,6 +65,14 @@ def main() -> None:
         "--migration-time", type=float, nargs="+", default=[1.0, 3.0, 5.0, 10.0],
         help="service migration durations to sweep [s]",
     )
+    ap.add_argument(
+        "--margin", type=float, default=0.0,
+        help="safety lead time applied in the migration-duration tables [s]",
+    )
+    ap.add_argument(
+        "--margins", type=float, nargs="+", default=[0.0, 1.0, 2.0, 3.0, 4.0, 6.0],
+        help="safety lead times to sweep",
+    )
     ap.add_argument("--snap", action="store_true", help="apply Link Projection")
     ap.add_argument("--plot", action="store_true")
     args = ap.parse_args()
@@ -140,54 +148,101 @@ def main() -> None:
 
     # --- sweep migration durations -----------------------------------------
     results: dict[str, dict[str, dict[str, float]]] = {}
+    width = 20
+    col = 15
     for t_m in args.migration_time:
         rows = {"reactive": reactive_metrics(t_true_h, t_m)}
         for name, (t_p, seen) in handovers.items():
-            rows[name] = migration_metrics(t_p, seen, t_true_h, t_m)
+            rows[name] = migration_metrics(t_p, seen, t_true_h, t_m, margin=args.margin)
         results[f"{t_m:g}"] = rows
 
-        width = max(len(n) for n in rows) + 2
-        header = f"{'policy':<{width}}" + "".join(f"{k:>26}" for k in ROW_KEYS)
-        print(f"\n=== migration time {t_m:g} s | {n_handover:,} handovers ===")
+        header = f"{'policy':<{width}}" + "".join(f"{k[:col - 1]:>{col}}" for k in ROW_KEYS)
+        print(
+            f"\n=== migration time {t_m:g} s | margin {args.margin:g} s "
+            f"| {n_handover:,} handovers ==="
+        )
         print(header)
         print("-" * len(header))
         for name, m in rows.items():
-            print(f"{name:<{width}}" + "".join(f"{m[k]:>26.3f}" for k in ROW_KEYS))
+            print(f"{name:<{width}}" + "".join(f"{m[k]:>{col}.3f}" for k in ROW_KEYS))
+
+    # --- what does a safety margin buy? ------------------------------------
+    # The cost is asymmetric: early only wastes residency, late interrupts. A
+    # more accurate predictor should therefore need less margin to reach the
+    # same interruption -- this sweep is where prediction accuracy either does
+    # or does not become a system-level advantage.
+    t_ref = args.migration_time[len(args.migration_time) // 2]
+    margin_sweep: dict[str, dict[str, list[float]]] = {}
+    print(f"\n=== safety-margin sweep at migration time {t_ref:g} s ===")
+    print(f"{'margin [s]':<12}" + "".join(f"{n:>22}" for n in handovers))
+    print(f"{'':<12}" + "".join(f"{'interrupt / wasted':>22}" for _ in handovers))
+    print("-" * (12 + 22 * len(handovers)))
+    for mg in args.margins:
+        cells = ""
+        for name, (t_p, seen) in handovers.items():
+            m = migration_metrics(t_p, seen, t_true_h, t_ref, margin=mg)
+            margin_sweep.setdefault(name, {"margin": [], "interruption": [], "premature": []})
+            margin_sweep[name]["margin"].append(mg)
+            margin_sweep[name]["interruption"].append(m["mean_interruption_s"])
+            margin_sweep[name]["premature"].append(m["mean_premature_s"])
+            cells += f"{m['mean_interruption_s']:>13.3f} /{m['mean_premature_s']:>7.2f}"
+        print(f"{mg:<12g}{cells}")
 
     out_dir = Path(args.ckpt).parent
     tag = "_snap" if args.snap else ""
     with open(out_dir / f"migration_{args.split}{tag}.json", "w") as f:
         json.dump(
-            {"rsu_spacing": args.rsu_spacing, "n_handovers": n_handover, "sweep": results},
+            {
+                "rsu_spacing": args.rsu_spacing,
+                "n_handovers": n_handover,
+                "sweep": results,
+                "margin_sweep": margin_sweep,
+            },
             f, indent=2,
         )
     print(f"\nwrote {out_dir / f'migration_{args.split}{tag}.json'}")
 
     if args.plot:
-        plot_sweep(results, args.migration_time, out_dir / f"migration_{args.split}{tag}.png")
+        plot_sweep(
+            results, args.migration_time, margin_sweep, t_ref,
+            out_dir / f"migration_{args.split}{tag}.png",
+        )
 
 
-def plot_sweep(results, migration_times, out_path: Path) -> None:
-    """Interruption against migration duration, one line per policy."""
+def plot_sweep(results, migration_times, margin_sweep, t_ref, out_path: Path) -> None:
+    """Three panels: cost vs migration time, and what a safety margin buys."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     policies = list(next(iter(results.values())).keys())
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.2))
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.2))
 
     for p in policies:
         y = [results[f"{t:g}"][p]["mean_interruption_s"] for t in migration_times]
         axes[0].plot(migration_times, y, marker="o", lw=2, label=p)
-        y2 = [results[f"{t:g}"][p]["zero_interruption_rate"] * 100 for t in migration_times]
-        axes[1].plot(migration_times, y2, marker="o", lw=2, label=p)
-
+    axes[0].set_xlabel("service migration time [s]")
     axes[0].set_ylabel("mean service interruption [s]")
-    axes[1].set_ylabel("handovers with no interruption [%]")
+    axes[0].set_title("cost vs migration duration", fontsize=10)
+    axes[0].legend(fontsize=8)
+
+    for name, d in margin_sweep.items():
+        axes[1].plot(d["margin"], d["interruption"], marker="o", lw=2, label=name)
+        # The trade-off the margin actually makes: interruption bought with
+        # wasted residency on the next RSU.
+        axes[2].plot(d["premature"], d["interruption"], marker="o", lw=2, label=name)
+
+    axes[1].set_xlabel("safety margin [s]")
+    axes[1].set_ylabel("mean service interruption [s]")
+    axes[1].set_title(f"effect of a safety margin (T_m = {t_ref:g} s)", fontsize=10)
+
+    axes[2].set_xlabel("wasted RSU residency [s]")
+    axes[2].set_ylabel("mean service interruption [s]")
+    axes[2].set_title("the trade-off: lower is better on both axes", fontsize=10)
+    axes[2].legend(fontsize=8)
+
     for ax in axes:
-        ax.set_xlabel("service migration time [s]")
         ax.grid(alpha=0.3)
-    axes[0].legend(fontsize=9)
     fig.tight_layout()
     fig.savefig(out_path, dpi=130)
     print(f"wrote {out_path}")
