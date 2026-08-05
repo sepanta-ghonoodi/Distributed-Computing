@@ -144,3 +144,5 @@ splits the error into longitudinal and lateral RMSE. Expect the baseline to:
 
 That lateral drift is the failure mode Phase 2 (Link Projection) exists to fix,
 and the `rmse_lat` / `ade@30s` columns are the before/after numbers to quote.
+
+---

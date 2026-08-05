@@ -1,20 +1,14 @@
-# Phase 1 — Baseline Seq2Seq Transformer trajectory predictor.
-# Every key here maps 1:1 onto a dataclass field in src/config.py; unknown keys
-# raise at load time rather than being silently ignored.
 
 data:
   unified_path: data/processed/unified.parquet
   cache_dir: data/processed/windows
 
-  # NGSIM is 10 Hz, highD is 25 Hz. Both are resampled to target_hz during
-  # preprocessing, so this value must match what you passed to
-  # `python -m src.data.preprocess --target-hz`.
   source_hz: 10.0
-  target_hz: 2.0        # -> 20 observed steps, 60 predicted steps
+  target_hz: 2.0
 
-  obs_seconds: 10.0     # T_obs from the plan
-  pred_seconds: 30.0    # T_pred from the plan
-  window_stride: 4      # 2 s between consecutive windows at 2 Hz
+  obs_seconds: 10.0
+  pred_seconds: 30.0
+  window_stride: 4
   min_mean_speed: 1.0
 
   val_fraction: 0.15
@@ -41,7 +35,7 @@ train:
   weight_decay: 1.0e-4
   warmup_steps: 500
   grad_clip: 1.0
-  loss: huber_position    # huber_position | mse_position | ade
+  loss: huber_position
   teacher_forcing: true
   num_workers: 4
   device: cuda

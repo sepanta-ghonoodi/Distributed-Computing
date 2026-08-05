@@ -1,8 +1,3 @@
-# NGSIM control run -- real US-101 / I-80 trajectories, no IDM term.
-# Identical to phase1_baseline.yaml except for the runtime knobs: Colab gives
-# ~2 CPU cores (so fewer dataloader workers) and a single GPU (so AMP is worth
-# enabling). If no GPU is attached, src/train.py falls back to CPU with a
-# warning rather than crashing.
 
 data:
   unified_path: data/processed/ngsim.parquet
@@ -11,9 +6,6 @@ data:
   target_hz: 2.0
   obs_seconds: 10.0
   pred_seconds: 30.0
-  # Halved vs the synthetic configs: a 15-minute NGSIM slice yields ~950
-  # usable vehicles against the simulator's 200, so denser striding keeps
-  # the window count in the same ballpark.
   window_stride: 2
   min_mean_speed: 1.0
   val_fraction: 0.15
@@ -34,15 +26,15 @@ model:
   output_scale: 10.0
 
 train:
-  batch_size: 128       # a T4 handles this comfortably at d_model=128
+  batch_size: 128
   epochs: 20
   lr: 3.0e-4
   weight_decay: 1.0e-4
   warmup_steps: 500
   grad_clip: 1.0
-  loss: huber_position    # huber_position | mse_position | ade
+  loss: huber_position
   teacher_forcing: true
-  num_workers: 2        # Colab VMs expose ~2 cores
+  num_workers: 2
   device: cuda
   amp: true
   seed: 42
@@ -51,4 +43,4 @@ train:
   out_dir: runs/ngsim_control
 
 physics:
-  weight: 0.0        # no IDM term -- this is the control
+  weight: 0.0
