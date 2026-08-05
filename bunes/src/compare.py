@@ -74,12 +74,21 @@ def main() -> None:
     ap.add_argument("--out", default=None, help="where to write the JSON (default: first ckpt dir)")
     args = ap.parse_args()
 
-    variants = []
+    variants, missing = [], []
     for spec in args.variants:
         if "=" not in spec:
             raise SystemExit(f"--variants expects name=path, got '{spec}'")
         name, path = spec.split("=", 1)
-        variants.append((name, path))
+        # A run that has not finished yet should cost a warning and a shorter
+        # table, not the whole comparison.
+        (variants if Path(path).exists() else missing).append((name, path))
+
+    if missing:
+        print("\nskipping variants whose checkpoint does not exist yet:")
+        for name, path in missing:
+            print(f"  {name:<12} {path}")
+    if not variants:
+        raise SystemExit("None of the requested checkpoints exist — nothing to compare.")
 
     # Every variant must share a dataset for the comparison to mean anything.
     first_cfg = config_from_dict(
